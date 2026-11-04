@@ -102,6 +102,7 @@ window.__ModuleLoader__.load({
       remove: "Remove workspace",
       failure: "Operation failed",
       loading: "Loading…",
+      completed: "Completed (unread)",
       invalidOrder: "Invalid saved order",
       orderChanged:
         "Order changed during the operation. Pin state saved; drag again to reorder.",
@@ -135,6 +136,7 @@ window.__ModuleLoader__.load({
       remove: "移除工作区",
       failure: "操作失败",
       loading: "加载中…",
+      completed: "已完成（未读）",
       invalidOrder: "保存的排序数据无效",
       orderChanged: "操作期间排序已变化。置顶状态已保存，请重新拖拽排序。",
     };
@@ -142,7 +144,8 @@ window.__ModuleLoader__.load({
     function Browser(p) {
       const { t, api } = p,
         list = p.useSessions((s) => s),
-        ws = p.useWorkspaces((s) => s);
+        ws = p.useWorkspaces((s) => s),
+        statuses = p.useSessionStatus((s) => s);
       const [prefs, setPrefs] = React.useState(() => {
         try {
           return clean(JSON.parse(localStorage.getItem(KEY) || "null"));
@@ -367,7 +370,14 @@ window.__ModuleLoader__.load({
       }
       function row(id, key, ids) {
         if (!visible(id)) return null;
-        const archived = archives.has(id);
+        const archived = archives.has(id),
+          status = statuses.get(id),
+          running = status?.running ?? byId[id].running,
+          completed =
+            !running &&
+            !archived &&
+            !byId[id].blank &&
+            status?.completionUnread === true;
         return h(
           React.Fragment,
           { key: id },
@@ -400,9 +410,16 @@ window.__ModuleLoader__.load({
                 title: title(id),
                 onClick: () => api.open(id),
               },
-              byId[id].running ? "◌ " : null,
+              running ? "◌ " : null,
               title(id),
             ),
+            completed &&
+              h("span", {
+                className: "gp-completed",
+                role: "img",
+                "aria-label": t("completed"),
+                title: t("completed"),
+              }),
             !byId[id].blank &&
               h(
                 "span",
@@ -492,6 +509,7 @@ window.__ModuleLoader__.load({
           null,
           css +
             `
+.gp-completed{width:6px;height:6px;flex:none;border-radius:50%;margin:0 5px;background:var(--dsw-alias-state-success-primary)}
 .gp-row,.gp-drop,.gp-group{position:relative}
 .gp [data-drop]::before{content:"";position:absolute;left:8px;right:8px;height:2px;background:var(--dsw-alias-brand-primary);z-index:2;pointer-events:none}
 .gp [data-drop]::after{content:"";position:absolute;left:5px;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-brand-primary);z-index:2;pointer-events:none}

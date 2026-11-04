@@ -9,6 +9,7 @@ function setup({
   ids = ["a", "b", "new"],
   pinned = ["a", "b"],
   order = ids,
+  locale,
 } = {}) {
   let component,
     plugin,
@@ -76,9 +77,15 @@ function setup({
       },
     },
   );
+  let messages;
   plugin.apply({
     effect: (fn) => fn(),
-    locale: { register: () => () => {} },
+    locale: {
+      register: (_namespace, values) => {
+        messages = values;
+        return () => {};
+      },
+    },
     slots: {
       inject: (_name, fn) => fn(),
       register: (options, fn) => {
@@ -111,11 +118,13 @@ function setup({
       ]),
     ),
   };
+  let statuses = new Map();
   const props = {
     wide: true,
-    t: (key) => key,
+    t: (key) => (locale ? messages[locale][key] : key),
     useSessions: (select) => select(list),
     useWorkspaces: (select) => select(ws),
+    useSessionStatus: (select) => select(statuses),
     api: {
       unpin: async (id) => {
         unpinCalls.push(id);
@@ -182,6 +191,10 @@ function setup({
     dragBefore,
     finishPin,
     saved: () => JSON.parse(storage.get(KEY)),
+    publishStatuses(entries) {
+      statuses = new Map(entries);
+      render();
+    },
     external(value) {
       storage.set(KEY, JSON.stringify(value));
       listeners.get("storage")({ key: KEY, newValue: JSON.stringify(value) });
@@ -192,6 +205,111 @@ function setup({
     },
   };
 }
+
+test("completion unread dot follows status updates in pinned and ordinary rows", () => {
+  const f = setup({ ids: ["a", "b"], pinned: ["a"] });
+  const dot = (id) =>
+    f.nodes(f.row(id)).find((n) => n.props["aria-label"] === "completed");
+  try {
+    for (const completionUnread of [true, false, true]) {
+      f.publishStatuses(
+        ["a", "b"].map((id) => [id, { running: false, completionUnread }]),
+      );
+      for (const id of ["a", "b"])
+        assert.equal(
+          Boolean(dot(id)),
+          completionUnread,
+          `${id}: completion ${completionUnread}`,
+        );
+    }
+    f.publishStatuses(["a", "b"].map((id) => [id, { running: false }]));
+    assert.equal(Boolean(dot("a")), false);
+    assert.equal(Boolean(dot("b")), false);
+    f.publishStatuses([]);
+    assert.equal(Boolean(dot("a")), false);
+    assert.equal(Boolean(dot("b")), false);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("running status takes priority over unread and falls back to the summary", () => {
+  const f = setup({ ids: ["a", "b"], pinned: ["a"] });
+  const dot = (id) =>
+    f.nodes(f.row(id)).some((n) => n.props["aria-label"] === "completed");
+  const running = (id) =>
+    f
+      .row(id)
+      .children.find((n) => n?.props?.className === "gp-title")
+      .children.includes("◌ ");
+  try {
+    f.list.byId.a.running = true;
+    f.list.byId.b.running = false;
+    f.publishStatuses([
+      ["a", { running: false, completionUnread: true }],
+      ["b", { running: true, completionUnread: true }],
+    ]);
+    assert.equal(running("a"), false, "explicit false overrides stale summary");
+    assert.equal(dot("a"), true);
+    assert.equal(running("b"), true);
+    assert.equal(dot("b"), false, "running suppresses unread completion");
+    f.publishStatuses([["a", { completionUnread: true }]]);
+    assert.equal(running("a"), true, "missing running field uses summary");
+    assert.equal(dot("a"), false);
+    assert.equal(running("b"), false);
+    f.publishStatuses([]);
+    assert.equal(running("a"), true, "missing status uses summary");
+    assert.equal(dot("a"), false);
+    assert.equal(f.list.byId.a.running, true, "status never mutates summary");
+    assert.equal(f.list.byId.b.running, false);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("archived and active blank rows suppress completion unread dots", () => {
+  const f = setup({ ids: ["a", "b"], pinned: ["a"] });
+  try {
+    f.ws.archivedSessionIds = ["a"];
+    f.list.byId.b.blank = true;
+    f.list.byId.b.retainedBy.mainView = 1;
+    f.find(
+      (n) => n.type === "input" && n.props.type === "checkbox",
+    ).props.onChange({ target: { checked: true } });
+    f.publishStatuses(
+      ["a", "b"].map((id) => [id, { running: false, completionUnread: true }]),
+    );
+    for (const id of ["a", "b"]) {
+      assert.equal(
+        f.nodes(f.row(id)).some((n) => n.props["aria-label"] === "completed"),
+        false,
+      );
+    }
+  } finally {
+    f.dispose();
+  }
+});
+
+test("completion dot has a localized accessible label and title", () => {
+  for (const [locale, label] of [
+    ["en", "Completed (unread)"],
+    ["zh", "已完成（未读）"],
+  ]) {
+    const f = setup({ locale });
+    try {
+      f.publishStatuses([["a", { running: false, completionUnread: true }]]);
+      const dot = f.nodes(f.row("a")).find((n) => n.props.role === "img");
+      assert.equal(dot.props["aria-label"], label);
+      assert.equal(dot.props.title, label);
+      assert.ok(
+        f.row("a").children.indexOf(dot) > 0,
+        "dot follows title on the right",
+      );
+    } finally {
+      f.dispose();
+    }
+  }
+});
 
 test("pin buttons retain the original pin artwork and state", () => {
   const f = setup();
