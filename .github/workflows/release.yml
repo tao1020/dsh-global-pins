@@ -1,0 +1,28 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify release revision and version
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          test "$GITHUB_REF_NAME" = "v$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+      - run: node --check client.js && node --check index.js && npm test
+      - name: Package and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/local-global-pins-"*.tgz --verify-tag --title "Global Pins $GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md

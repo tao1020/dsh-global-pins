@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Global pinned conversations",
+    "description": "Collect pinned conversations across workspaces with drag ordering and recent-first sorting. Replaces the workspace browser; original membership is preserved."
+  }
+}
