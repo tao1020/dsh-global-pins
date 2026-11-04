@@ -1,6 +1,6 @@
 {
   "name": "@local/global-pins",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Cross-workspace pinned sessions with manual drag ordering and recent-first sorting for DeepSeek Harness.",
   "repository": {
