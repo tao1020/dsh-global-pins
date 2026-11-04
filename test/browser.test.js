@@ -280,10 +280,7 @@ test("running status takes priority over unread and falls back to the summary", 
   const dot = (id) =>
     f.nodes(f.row(id)).some((n) => n.props["aria-label"] === "completed");
   const running = (id) =>
-    f
-      .row(id)
-      .children.find((n) => n?.props?.className === "gp-title")
-      .children.includes("◌ ");
+    f.nodes(f.row(id)).some((n) => n.props["aria-label"] === "running");
   try {
     f.list.byId.a.running = true;
     f.list.byId.b.running = false;
@@ -362,7 +359,8 @@ test("pin buttons retain the original pin artwork and state", () => {
     ]) {
       const actions = f
         .row(id)
-        .children.find((n) => n?.props?.className === "gp-actions");
+        .children.find((n) => n?.props?.className === "gp-actions")
+        .children.find((n) => n?.props?.className === "gp-row-actions");
       const button = actions.children.find(
         (n) => n.props["aria-label"] === label,
       );
@@ -480,11 +478,7 @@ test("pin snapshot arriving before reply preserves requested drag position", asy
 test("move up uses visible ordinary neighbor across hidden pinned member", async () => {
   const f = setup({ ids: ["a", "pin", "b"], pinned: ["pin"] });
   try {
-    f.row("b")
-      .children.find((n) => n?.props?.className === "gp-actions")
-      .children.find((n) => n.props["aria-label"] === "more")
-      .props.onClick();
-    f.render();
+    openRowMenu(f, "b");
     f.find(
       (n) => n.type === "button" && n.children.includes("up"),
     ).props.onClick();
@@ -663,11 +657,17 @@ test("registered rename API declares its scoped remote dependency", async () => 
   }
 });
 
-function openRename(f, id = "a") {
-  f.nodes(f.row(id))
-    .find((n) => n.props["aria-label"] === "more")
-    .props.onClick();
+function openRowMenu(f, id = "a", origin = { focus() {} }) {
+  f.row(id).props.onContextMenu({
+    preventDefault() {},
+    stopPropagation() {},
+    target: { closest: () => null },
+    currentTarget: { querySelector: () => origin },
+  });
   f.render();
+}
+function openRename(f, id = "a") {
+  openRowMenu(f, id);
   f.find(
     (n) => n.type === "button" && n.children.includes("rename"),
   ).props.onClick();
@@ -708,6 +708,43 @@ test("session rename replaces title in its own row and saves through registered 
       f.nodes().some((n) => n.props.className === "gp-rename"),
       false,
     );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("opening the rename editor focuses and selects the whole title once", () => {
+  const f = setup();
+  try {
+    openRename(f);
+    const input = renameInput(f);
+    assert.equal(input.props.value, "a");
+    assert.equal(input.props.autoFocus, undefined);
+    const calls = [];
+    const node = {
+      focus: () => calls.push("focus"),
+      select: () => calls.push("select"),
+    };
+    const mountRef = input.props.ref;
+    assert.equal(typeof mountRef, "function");
+    mountRef(node);
+    assert.deepEqual(calls, ["focus", "select"]);
+    assert.doesNotThrow(() => mountRef(null));
+    assert.deepEqual(calls, ["focus", "select"]);
+    // Typing re-renders the row; the mount ref must keep its identity so the
+    // browser never re-runs focus/select and steal the caret mid-edit.
+    input.props.onChange({ target: { value: "New name" } });
+    f.render();
+    assert.equal(renameInput(f).props.ref, mountRef);
+    // Closing and reopening another row mounts a fresh editor with the same
+    // stable ref, so the new title is selected again.
+    renameForm(f).props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    openRename(f, "b");
+    assert.equal(renameInput(f).props.value, "b");
+    assert.equal(renameInput(f).props.ref, mountRef);
+    mountRef(node);
+    assert.deepEqual(calls, ["focus", "select", "focus", "select"]);
   } finally {
     f.dispose();
   }
@@ -783,7 +820,7 @@ test("IME Enter and empty rename never submit or start dragging", () => {
   }
 });
 
-test("right-click and ellipsis open the same accessible actions and Escape restores focus", () => {
+test("right-click opens the accessible actions and Escape restores focus", () => {
   const f = setup();
   try {
     let prevented = 0,
@@ -816,10 +853,12 @@ test("right-click and ellipsis open the same accessible actions and Escape resto
       f.nodes().some((n) => n.props.role === "menu"),
       false,
     );
-    f.nodes(f.row("a"))
-      .find((n) => n.props["aria-label"] === "more")
-      .props.onClick({ currentTarget: origin });
-    f.render();
+    assert.equal(
+      f.nodes(f.row("a")).some((n) => n.props["aria-label"] === "more"),
+      false,
+      "rows no longer expose an ellipsis button",
+    );
+    openRowMenu(f, "a", origin);
     assert.deepEqual(
       f
         .nodes(f.find((n) => n.props.role === "menu"))
@@ -859,10 +898,13 @@ test("pin and native archive glyphs are both right-side 14px actions", () => {
   try {
     for (const id of ["a", "new"]) {
       const row = f.row(id);
-      const actions = row.children.find(
+      const container = row.children.find(
         (n) => n?.props?.className === "gp-actions",
       );
-      assert.ok(row.children.indexOf(actions) > 0);
+      assert.ok(row.children.indexOf(container) > 0);
+      const actions = container.children.find(
+        (n) => n?.props?.className === "gp-row-actions",
+      );
       for (const label of [id === "a" ? "unpin" : "pin", "archive"]) {
         const icon = actions.children.find(
           (n) => n.props["aria-label"] === label,
@@ -891,16 +933,11 @@ test("rejected rename retains draft and retries successfully with local focus re
     },
   });
   try {
-    f.nodes(f.row("a"))
-      .find((n) => n.props["aria-label"] === "more")
-      .props.onClick({
-        currentTarget: {
-          focus() {
-            focused++;
-          },
-        },
-      });
-    f.render();
+    openRowMenu(f, "a", {
+      focus() {
+        focused++;
+      },
+    });
     f.find(
       (n) => n.type === "button" && n.children.includes("rename"),
     ).props.onClick();
@@ -956,10 +993,7 @@ test("composition lifecycle guards Enter and Escape until composition ends", () 
 test("menu keyboard navigation and focus-out dismissal stay within owned menu", () => {
   const f = setup();
   try {
-    f.nodes(f.row("a"))
-      .find((n) => n.props["aria-label"] === "more")
-      .props.onClick();
-    f.render();
+    openRowMenu(f, "a");
     const menu = f.find((n) => n.props.role === "menu");
     let focused = -1;
     const items = [0, 1, 2].map((i) => ({
@@ -1016,6 +1050,124 @@ test("editing remains visible across search and blocks collapsing its row", () =
       f.nodes().some((n) => n.props.className === "gp-rename"),
       false,
     );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("running rows show an animated spinner instead of a title glyph", () => {
+  const f = setup();
+  try {
+    const css = f.find((n) => n.type === "style").children.join("");
+    assert.match(
+      css,
+      /\.gp-row\[data-running=true\] \.gp-spin\{display:inline-flex\}/,
+    );
+    assert.match(
+      css,
+      /\.gp-row\[data-running=true\] \.gp-row-actions\{display:none\}/,
+    );
+    assert.match(
+      css,
+      /\.gp-row\[data-running=true\]:hover \.gp-row-actions[^{]*\{display:inline-flex\}/,
+    );
+    assert.match(
+      css,
+      /\.gp-row\[data-running=true\]:focus-within \.gp-spin\{display:none\}/,
+    );
+    assert.match(
+      css,
+      /\.gp-row\[data-running=true\]:focus-within \.gp-row-actions\{display:inline-flex\}/,
+    );
+    assert.match(
+      css,
+      /\.gp-row\[data-running=true\]:hover \.gp-spin,[^{]*\{display:none\}/,
+    );
+    assert.match(css, /\.gp-actions\{[^}]*min-width:48px\}/);
+    assert.match(
+      css,
+      /\.gp-spin svg\{animation:gp-spin-frame 1s linear infinite\}/,
+    );
+    assert.match(
+      css,
+      /@keyframes gp-spin-frame\{to\{transform:rotate\(360deg\)\}\}/,
+    );
+    assert.match(
+      css,
+      /prefers-reduced-motion:reduce\)\{\.gp-spin svg\{animation:none\}\}/,
+    );
+    f.publishStatuses([["a", { running: true }]]);
+    const row = f.row("a");
+    assert.equal(row.props["data-running"], "true");
+    assert.equal(f.row("b").props["data-running"], undefined);
+    const spin = f.nodes(row).find((n) => n.props["aria-label"] === "running");
+    assert.equal(spin.type, "span");
+    assert.equal(spin.props.role, "img");
+    assert.equal(spin.props.title, "running");
+    assert.equal(spin.props.className, "gp-spin");
+    const icon = spin.children[0];
+    assert.equal(icon.type, "svg");
+    assert.equal(icon.props.width, 14);
+    assert.equal(icon.props.height, 14);
+    assert.equal(icon.children[0].props.r, 6);
+    assert.equal(icon.children[1].props.d, "M8 2a6 6 0 0 1 6 6");
+    const title = row.children.find((n) => n?.props?.className === "gp-title");
+    assert.equal(title.children.join(""), "a", "title has no glyph prefix");
+    const actions = row.children.find(
+      (n) => n?.props?.className === "gp-actions",
+    );
+    assert.equal(
+      row.children[row.children.length - 1],
+      actions,
+      "actions are the last row child, so the spinner sits on the right",
+    );
+    assert.equal(
+      actions.children[actions.children.length - 1].props.className,
+      "gp-row-actions",
+      "pin and archive follow the spinner",
+    );
+    assert.ok(
+      actions.children.some((n) => n?.props?.className === "gp-row-actions"),
+      "pin and archive stay mounted for the hover state",
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("running indicator has a localized accessible label", () => {
+  for (const [locale, label] of [
+    ["en", "Running"],
+    ["zh", "运行中"],
+  ]) {
+    const f = setup({ locale });
+    try {
+      f.publishStatuses([["a", { running: true }]]);
+      const spin = f
+        .nodes(f.row("a"))
+        .find((n) => n.props["aria-label"] === label);
+      assert.equal(spin.props.title, label);
+    } finally {
+      f.dispose();
+    }
+  }
+});
+
+test("rows drop the ellipsis button but keep the right-click menu", () => {
+  const f = setup();
+  try {
+    for (const id of ["a", "b", "new"])
+      assert.equal(
+        f.nodes(f.row(id)).some((n) => n.props["aria-label"] === "more"),
+        false,
+        `${id}: no ellipsis`,
+      );
+    openRowMenu(f, "a");
+    const items = f
+      .nodes(f.find((n) => n.props.role === "menu"))
+      .filter((n) => n.props.role === "menuitem")
+      .map((n) => n.children[0]);
+    assert.deepEqual(items, ["rename", "fork", "archive", "up", "down"]);
   } finally {
     f.dispose();
   }

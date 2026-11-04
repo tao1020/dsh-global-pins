@@ -1,6 +1,6 @@
 {
   "name": "@local/global-pins",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "Cross-workspace pinned sessions with manual drag ordering and recent-first sorting for DeepSeek Harness.",
   "repository": {
@@ -22,6 +22,7 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
+    "docs/*.png",
     "README.md"
   ],
   "scripts": {
