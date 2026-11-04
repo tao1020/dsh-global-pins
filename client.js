@@ -29,6 +29,26 @@ window.__ModuleLoader__.load({
         }),
       );
     }
+    // Shipped IconArchiveOutlineRegular, displayed at the native row size.
+    function archiveIcon() {
+      return h(
+        "svg",
+        {
+          width: 14,
+          height: 14,
+          viewBox: "0 0 16 16",
+          fill: "none",
+          strokeWidth: 1,
+          "aria-hidden": "true",
+          focusable: "false",
+        },
+        ...[
+          "M13.5 2.5H2.5C1.94772 2.5 1.5 2.94772 1.5 3.5V4.5C1.5 5.05228 1.94772 5.5 2.5 5.5H13.5C14.0523 5.5 14.5 5.05228 14.5 4.5V3.5C14.5 2.94772 14.0523 2.5 13.5 2.5Z",
+          "M2.5 5.5V13.5C2.5 13.7652 2.60536 14.0196 2.79289 14.2071C2.98043 14.3946 3.23478 14.5 3.5 14.5H12.5C12.7652 14.5 13.0196 14.3946 13.2071 14.2071C13.3946 14.0196 13.5 13.7652 13.5 13.5V5.5",
+          "M6.5 9.5H9.5",
+        ].map((d) => h("path", { key: d, d, stroke: "currentColor" })),
+      );
+    }
     function reconcile(ids, saved = []) {
       const allowed = new Set(ids);
       return [...new Set([...saved.filter((id) => allowed.has(id)), ...ids])];
@@ -140,7 +160,7 @@ window.__ModuleLoader__.load({
       invalidOrder: "保存的排序数据无效",
       orderChanged: "操作期间排序已变化。置顶状态已保存，请重新拖拽排序。",
     };
-    const css = `.gp{min-height:0;overflow:auto;padding:8px;font:inherit;color:var(--dsw-alias-label-primary);flex:1}.gp button,.gp input,.gp select{font:inherit;color:inherit}.gp button{cursor:pointer;background:transparent;border:0;border-radius:7px;padding:6px}.gp button:hover,.gp-row[data-selected=true]{background:var(--dsw-alias-bg-layer-2)}.gp button:focus-visible,.gp input:focus-visible,.gp select:focus-visible{outline:2px solid currentColor;outline-offset:1px}.gp-header{display:flex;align-items:center;gap:4px;margin:12px 0 5px}.gp-header strong{flex:1;font-size:13px;color:var(--dsw-alias-label-secondary)}.gp input,.gp select{box-sizing:border-box;max-width:100%;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:5px}.gp-search{width:100%}.gp-row{display:flex;align-items:center;min-height:36px;border-radius:8px;gap:2px}.gp-title{flex:1;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gp-actions{display:flex;align-items:center}.gp-menu{padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;display:flex;flex-wrap:wrap}.gp-note{font-size:12px;color:var(--dsw-alias-label-secondary);padding:8px}.gp-error{padding:8px;overflow-wrap:anywhere;border:1px solid currentColor}.gp-drop{min-height:40px;border-radius:8px}.gp-group{margin-top:12px}.gp-row[draggable=true]{cursor:grab}.gp-sort{position:relative}.gp-sort summary{list-style:none;cursor:pointer;border-radius:7px;padding:4px 8px;font-size:20px;line-height:1}.gp-sort summary::-webkit-details-marker{display:none}.gp-sort summary:hover{background:var(--dsw-alias-bg-layer-2)}.gp-sort summary:focus-visible{outline:2px solid currentColor}.gp-sort-options{position:absolute;right:0;top:100%;z-index:10;min-width:160px;padding:5px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);border-radius:12px}.gp-sort-options button{display:flex;justify-content:space-between;gap:20px;width:100%;text-align:left;padding:9px}.gp-sort-options span{width:1em}`;
+    const css = `.gp{min-height:0;overflow:auto;padding:8px;font:inherit;color:var(--dsw-alias-label-primary);flex:1}.gp button,.gp input,.gp select{font:inherit;color:inherit}.gp button{cursor:pointer;background:transparent;border:0;border-radius:7px;padding:6px}.gp button:hover,.gp-row:hover,.gp-row[data-selected=true]{background:var(--dsw-alias-bg-layer-2)}.gp .gp-title:hover{background:transparent}.gp button:focus-visible,.gp input:focus-visible,.gp select:focus-visible{outline:2px solid currentColor;outline-offset:1px}.gp-header{display:flex;align-items:center;gap:4px;margin:12px 0 5px}.gp-header strong{flex:1;font-size:13px;color:var(--dsw-alias-label-secondary)}.gp input,.gp select{box-sizing:border-box;max-width:100%;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:5px}.gp-search{width:100%}.gp-row{display:flex;align-items:center;min-height:36px;border-radius:8px;gap:2px}.gp-title{flex:1;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gp-actions{display:flex;align-items:center}.gp-menu{padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;display:flex;flex-wrap:wrap}.gp-note{font-size:12px;color:var(--dsw-alias-label-secondary);padding:8px}.gp-error{padding:8px;overflow-wrap:anywhere;border:1px solid currentColor}.gp-drop{min-height:40px;border-radius:8px}.gp-group{margin-top:12px}.gp-row[draggable=true]{cursor:grab}.gp-sort{position:relative}.gp-sort summary{list-style:none;cursor:pointer;border-radius:7px;padding:4px 8px;font-size:20px;line-height:1}.gp-sort summary::-webkit-details-marker{display:none}.gp-sort summary:hover{background:var(--dsw-alias-bg-layer-2)}.gp-sort summary:focus-visible{outline:2px solid currentColor}.gp-sort-options{position:absolute;right:0;top:100%;z-index:10;min-width:160px;padding:5px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);border-radius:12px}.gp-sort-options button{display:flex;justify-content:space-between;gap:20px;width:100%;text-align:left;padding:9px}.gp-sort-options span{width:1em}`;
     function Browser(p) {
       const { t, api } = p,
         list = p.useSessions((s) => s),
@@ -154,6 +174,16 @@ window.__ModuleLoader__.load({
         }
       });
       const [editor, setEditor] = React.useState(null);
+      const [rename, setRename] = React.useState(null);
+      const actionOrigin = React.useRef(null);
+      const focusPending = React.useRef(false);
+      const composing = React.useRef(false);
+      function cancelRename() {
+        if (lock.current) return;
+        setRename(null);
+        setError("");
+        focusPending.current = true;
+      }
       const [error, setError] = React.useState(""),
         [query, setQuery] = React.useState(""),
         [showArchived, setShowArchived] = React.useState(false),
@@ -161,6 +191,13 @@ window.__ModuleLoader__.load({
         [menu, setMenu] = React.useState(null),
         [busy, setBusy] = React.useState(false),
         [over, setOver] = React.useState(null);
+      React.useEffect(() => {
+        // Wait until React re-enables the row action after rename/pending state.
+        if (focusPending.current && !busy && !rename && !menu) {
+          focusPending.current = false;
+          actionOrigin.current?.focus();
+        }
+      }, [busy, rename, menu]);
       const prefsRef = React.useRef(prefs);
       prefsRef.current = prefs;
       const drag = React.useRef(null),
@@ -251,8 +288,9 @@ window.__ModuleLoader__.load({
         byId[id]?.title || t(byId[id]?.blank ? "new" : "untitled");
       const visible = (id) =>
         valid(id) &&
-        (showArchived || !archives.has(id)) &&
-        (!query ||
+        (rename?.id === id || showArchived || !archives.has(id)) &&
+        (rename?.id === id ||
+          !query ||
           `${title(id)} ${groups.find((g) => g.workspaceId === owner.get(id))?.title ?? ""}`
             .toLowerCase()
             .includes(query.toLowerCase()));
@@ -368,6 +406,40 @@ window.__ModuleLoader__.load({
           reorder(key, reconcile([id, ...ids], ids), id, next.before);
         });
       }
+      function closeMenu(restoreFocus = true) {
+        setMenu(null);
+        if (restoreFocus) focusPending.current = true;
+      }
+      function openMenu(id, origin) {
+        if (lock.current || rename) return;
+        actionOrigin.current = origin;
+        setMenu(id);
+        drag.current = null;
+        setOver(null);
+      }
+      function menuKeys(e) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          closeMenu();
+        } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
+          e.preventDefault();
+          const items = [
+            ...e.currentTarget.querySelectorAll(
+              '[role="menuitem"]:not(:disabled)',
+            ),
+          ];
+          const index = items.indexOf(e.target);
+          const next =
+            e.key === "Home"
+              ? 0
+              : e.key === "End"
+                ? items.length - 1
+                : (index + (e.key === "ArrowDown" ? 1 : -1) + items.length) %
+                  items.length;
+          items[next]?.focus();
+        }
+      }
       function row(id, key, ids) {
         if (!visible(id)) return null;
         const archived = archives.has(id),
@@ -379,8 +451,8 @@ window.__ModuleLoader__.load({
             !byId[id].blank &&
             status?.completionUnread === true;
         return h(
-          React.Fragment,
-          { key: id },
+          "div",
+          { key: id, className: "gp-row-wrap" },
           h(
             "div",
             {
@@ -388,8 +460,36 @@ window.__ModuleLoader__.load({
               "data-selected": id === active,
               "data-drop": indicator(key, ids, id),
               draggable:
-                !busy && ws.phase === "ready" && !archived && !byId[id].blank,
+                !busy &&
+                !rename &&
+                !menu &&
+                ws.phase === "ready" &&
+                !archived &&
+                !byId[id].blank,
+              onContextMenu: (e) => {
+                if (
+                  e.target.closest("input,textarea") ||
+                  byId[id].blank ||
+                  rename
+                )
+                  return;
+                e.preventDefault();
+                e.stopPropagation();
+                openMenu(
+                  id,
+                  e.currentTarget.querySelector('[aria-haspopup="menu"]'),
+                );
+              },
               onDragStart: (e) => {
+                if (
+                  rename ||
+                  menu ||
+                  lock.current ||
+                  e.target?.closest("button,input,form")
+                ) {
+                  e.preventDefault();
+                  return;
+                }
                 drag.current = id;
                 e.dataTransfer.setData("text/plain", id);
                 e.dataTransfer.effectAllowed = "move";
@@ -402,17 +502,92 @@ window.__ModuleLoader__.load({
               onDragLeave: leave,
               onDrop: (e) => drop(e, key, ids, id),
             },
-            h(
-              "button",
-              {
-                className: "gp-title",
-                disabled: archived,
-                title: title(id),
-                onClick: () => api.open(id),
-              },
-              running ? "◌ " : null,
-              title(id),
-            ),
+            rename?.id === id
+              ? h(
+                  "form",
+                  {
+                    className: "gp-rename",
+                    onClick: (e) => e.stopPropagation(),
+                    onDragStart: (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    },
+                    onSubmit: (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const value = rename.value.trim();
+                      if (!value || composing.current) return;
+                      run(async () => {
+                        await api.rename(id, value);
+                        if (mounted.current) {
+                          setRename(null);
+                          focusPending.current = true;
+                        }
+                      });
+                    },
+                    onKeyDown: (e) => {
+                      e.stopPropagation();
+                      if (
+                        e.isComposing ||
+                        e.nativeEvent?.isComposing ||
+                        e.keyCode === 229 ||
+                        composing.current
+                      ) {
+                        if (e.key === "Enter") e.preventDefault();
+                        return;
+                      }
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        cancelRename();
+                      }
+                    },
+                  },
+                  h("input", {
+                    autoFocus: true,
+                    "aria-label": t("rename"),
+                    value: rename.value,
+                    disabled: busy,
+                    onCompositionStart: () => {
+                      composing.current = true;
+                    },
+                    onCompositionEnd: () => {
+                      composing.current = false;
+                    },
+                    onChange: (e) => setRename({ id, value: e.target.value }),
+                  }),
+                  h(
+                    "button",
+                    {
+                      type: "submit",
+                      disabled: busy || !rename.value.trim(),
+                      "aria-label": t("save"),
+                      title: t("save"),
+                    },
+                    "✓",
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      disabled: busy,
+                      onClick: cancelRename,
+                      "aria-label": t("cancel"),
+                      title: t("cancel"),
+                    },
+                    "×",
+                  ),
+                )
+              : h(
+                  "button",
+                  {
+                    className: "gp-title",
+                    disabled: archived,
+                    title: title(id),
+                    onClick: () => api.open(id),
+                  },
+                  running ? "◌ " : null,
+                  title(id),
+                ),
             completed &&
               h("span", {
                 className: "gp-completed",
@@ -427,7 +602,7 @@ window.__ModuleLoader__.load({
                 h(
                   "button",
                   {
-                    disabled: busy || archived,
+                    disabled: busy || archived || Boolean(rename),
                     title: t(pins.has(id) ? "unpin" : "pin"),
                     "aria-label": t(pins.has(id) ? "unpin" : "pin"),
                     onClick: () =>
@@ -438,9 +613,25 @@ window.__ModuleLoader__.load({
                 h(
                   "button",
                   {
+                    disabled: busy || Boolean(rename),
+                    title: t(archived ? "restore" : "archive"),
+                    "aria-label": t(archived ? "restore" : "archive"),
+                    onClick: () =>
+                      run(() => (archived ? api.restore(id) : api.archive(id))),
+                  },
+                  archiveIcon(),
+                ),
+                h(
+                  "button",
+                  {
+                    disabled: busy || Boolean(rename),
                     "aria-label": t("more"),
+                    "aria-haspopup": "menu",
                     "aria-expanded": menu === id,
-                    onClick: () => setMenu(menu === id ? null : id),
+                    onClick: (e) =>
+                      menu === id
+                        ? closeMenu()
+                        : openMenu(id, e?.currentTarget),
                   },
                   "⋯",
                 ),
@@ -449,7 +640,24 @@ window.__ModuleLoader__.load({
           menu === id &&
             h(
               "div",
-              { className: "gp-menu" },
+              {
+                className: "gp-menu gp-row-menu",
+                role: "menu",
+                "aria-label": t("more"),
+                ref: (node) => {
+                  if (node && !node.contains(node.ownerDocument.activeElement))
+                    node.querySelector('[role="menuitem"]')?.focus();
+                },
+                onKeyDown: menuKeys,
+                onBlur: (e) => {
+                  if (
+                    e.relatedTarget !== actionOrigin.current &&
+                    !e.currentTarget.contains(e.relatedTarget)
+                  )
+                    closeMenu(false);
+                },
+                onContextMenu: (e) => e.preventDefault(),
+              },
               ...[
                 "rename",
                 "fork",
@@ -461,17 +669,19 @@ window.__ModuleLoader__.load({
                   "button",
                   {
                     key: action,
+                    role: "menuitem",
                     disabled: busy,
                     onClick: () => {
-                      setMenu(null);
+                      closeMenu(action !== "rename");
+                      if (lock.current) return;
+                      if (action === "rename") {
+                        composing.current = false;
+                        setError("");
+                        setRename({ id, value: title(id) });
+                        return;
+                      }
                       run(async () => {
-                        if (action === "rename") {
-                          setEditor({
-                            label: t("rename"),
-                            value: title(id),
-                            submit: (value) => api.rename(id, value),
-                          });
-                        } else if (action === "up" || action === "down") {
+                        if (action === "up" || action === "down") {
                           const visibleIds = ids.filter(
                             (x) =>
                               visible(x) && (key === "pins" || !pins.has(x)),
@@ -503,12 +713,30 @@ window.__ModuleLoader__.load({
         );
       return h(
         "section",
-        { className: "gp", "aria-label": t("pins") },
+        {
+          className: "gp",
+          "aria-label": t("pins"),
+          onKeyDown: (e) => {
+            if (
+              rename &&
+              e.key === "Escape" &&
+              !e.isComposing &&
+              !e.nativeEvent?.isComposing &&
+              !composing.current
+            ) {
+              e.preventDefault();
+              e.stopPropagation();
+              cancelRename();
+            }
+          },
+        },
         h(
           "style",
           null,
           css +
             `
+.gp-row-wrap{position:relative}.gp-row-menu{position:absolute;right:0;top:100%;z-index:20;min-width:150px;display:flex;flex-direction:column;background:var(--dsw-alias-bg-overlay)}.gp-row-menu button{text-align:left}.gp-actions button{color:var(--dsw-alias-label-tertiary)}.gp-actions button:hover{color:var(--dsw-alias-label-primary)}
+.gp-rename{display:flex;align-items:center;flex:1;min-width:0}.gp-rename input{min-width:0;width:100%;flex:1}.gp-actions{flex:none}.gp-actions button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0}.gp-actions svg{flex:none}
 .gp-completed{width:6px;height:6px;flex:none;border-radius:50%;margin:0 5px;background:var(--dsw-alias-state-success-primary)}
 .gp-row,.gp-drop,.gp-group{position:relative}
 .gp [data-drop]::before{content:"";position:absolute;left:8px;right:8px;height:2px;background:var(--dsw-alias-brand-primary);z-index:2;pointer-events:none}
@@ -728,6 +956,7 @@ window.__ModuleLoader__.load({
               h(
                 "button",
                 {
+                  disabled: Boolean(rename),
                   "aria-expanded": !fold[g.workspaceId],
                   onClick: () =>
                     setFold({ ...fold, [g.workspaceId]: !fold[g.workspaceId] }),
@@ -774,7 +1003,14 @@ window.__ModuleLoader__.load({
       );
     }
     return {
-      inject: ["slots", "locale", "uiWorkspace", "workspaces", "remote"],
+      inject: [
+        "slots",
+        "locale",
+        "uiWorkspace",
+        "workspaces",
+        "remote",
+        "remote.session",
+      ],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register("local.globalPins", { en, zh }));
         ctx.slots.inject("sidebar.workspaces", () =>

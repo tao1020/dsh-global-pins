@@ -9,13 +9,13 @@ A standalone DSH bundle for the `sidebar.workspaces` public slot. It replaces th
 Install the prebuilt release in DeepSeek Harness using this package URL:
 
 ```text
-https://github.com/tao1020/dsh-global-pins/releases/download/v1.0.1/local-global-pins-1.0.1.tgz
+https://github.com/tao1020/dsh-global-pins/releases/download/v1.0.2/local-global-pins-1.0.2.tgz
 ```
 
 Or with the Harness CLI:
 
 ```sh
-dsh plugin add https://github.com/tao1020/dsh-global-pins/releases/download/v1.0.1/local-global-pins-1.0.1.tgz
+dsh plugin add https://github.com/tao1020/dsh-global-pins/releases/download/v1.0.2/local-global-pins-1.0.2.tgz
 ```
 
 Tested with DeepSeek Harness `0.2.1-rc.5`. No build step or npm account is required. The package keeps its original `@local/global-pins` identity so existing local installations update rather than install a second copy.
@@ -28,7 +28,9 @@ Tested with DeepSeek Harness `0.2.1-rc.5`. No build step or npm account is requi
 - Drag a conversation into the pin section to pin it. Drag within a section to reorder and switch to manual mode. A highlighted line and dot show the insertion point above/below a row or at the section end. Invalid or unchanged positions show no marker. Drag a pin back onto its own workspace to unpin and insert at the indicated position; the ordinary unpin button still restores the saved group position. Cross-workspace moves are rejected.
 - The pinned heading's ellipsis opens Manual / Last updated options, with a check beside the current mode. Selecting an option, leaving the control, or pressing Escape closes the popup. Selecting the current mode preserves its order.
 - New pins lead existing manual pins. Switching to recent clears saved manual layout; switching back freezes the currently visible chronology, including hidden archive positions.
-- Row actions support rename, fork, archive/restore, and keyboard-accessible move up/down. Workspace rows support new sessions and rename. Add workspace accepts an existing absolute directory path.
+- Right-click a conversation or use its ellipsis to open the same owned action menu: rename, fork, archive/restore, and move up/down. Arrow keys/Home/End navigate; Escape closes and restores focus, and leaving the menu dismisses it. The ellipsis remains available for touch.
+- Session rename replaces the title in that same row. Enter saves; Escape cancels. Composition input does not accidentally save/cancel. Empty names are rejected; failed saves keep the draft for retry; pending requests cannot duplicate. The input retains its native text-edit context menu. Workspace rename and Add workspace keep their separate forms.
+- Pin and archive actions sit on the right with native 14px SVG artwork and 24px button targets. Hover highlights the full conversation row, not only its title. Workspace rows support new sessions and rename. Add workspace accepts an existing absolute directory path.
 - Search filters titles and workspace names. Archived conversations cannot be opened until restored. Operations report Host errors instead of pretending to succeed.
 - Pinned and ordinary rows show a small green completion-unread dot on the right, using the native `useSessionStatus` snapshot and theme token. The dot has an English/Chinese accessible label. Running takes priority; archived and blank rows never show completion dots. Native status overrides the summary's running flag when present, including explicit `false`; otherwise the summary remains the fallback. Harness owns unread tracking and acknowledgement when opening a session; the plugin does not keep a separate unread registry.
 
@@ -46,6 +48,6 @@ npm test
 npx --yes prettier@3.6.2 --check client.js index.js test/*.test.js package.json locale/en.json locale/zh.json
 ```
 
-The 38 regression tests cover pure ordering/partition helpers, Host operation delegation and validation, and Browser hook/event behavior using a small VM harness (14 tests). The latter verifies asynchronous pin/storage races, visible-neighbor moves, and completion status rendering: true/false/missing unread state in pinned/ordinary rows, running priority and summary fallback, archive/blank suppression, and localized accessible labels. These are hook/event tests, not DOM rendering or visual interaction; native unread lifecycle and acknowledgement are not tested by this plugin harness. Registration asserts a priority below the shipped browser's 0. Live Client Inspect confirms the installed -100 entry is active. End-to-end pointer/visual checks remain outstanding.
+The 50 regression tests cover ordering/partition helpers, Host delegation/validation, and Browser hook/event behavior using a small VM harness (26 tests). Existing sorting, drag/storage races, and unread status checks remain. New checks execute the registered `apply`/slot `inject` API with scoped injection enforcement for both `remote` and `remote.session`; cover same-row rename, success/refusal/rejection/retry, pending duplicates, empty input, composition, cancellation and focus; compare right-click and ellipsis actions; and check native icon dimensions and full-row hover CSS. These are hook/event and CSS-contract tests, not actual DOM layout or desktop interaction. Native unread lifecycle, real focus/IME behavior, and menu positioning/clipping still need end-to-end visual checks. This patch was not independently desktop-validated.
 
 The bundle logo is original artwork. Row pin icons match the shipped Harness outline/filled pin paths. No runtime dependencies or install scripts are required.
