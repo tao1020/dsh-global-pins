@@ -49,6 +49,34 @@ window.__ModuleLoader__.load({
         ].map((d) => h("path", { key: d, d, stroke: "currentColor" })),
       );
     }
+    // Right-side running indicator; the CSS animation keeps the arc moving.
+    function spinnerIcon() {
+      return h(
+        "svg",
+        {
+          width: 14,
+          height: 14,
+          viewBox: "0 0 16 16",
+          fill: "none",
+          "aria-hidden": "true",
+          focusable: "false",
+        },
+        h("circle", {
+          cx: 8,
+          cy: 8,
+          r: 6,
+          stroke: "currentColor",
+          strokeWidth: 1.5,
+          opacity: 0.25,
+        }),
+        h("path", {
+          d: "M8 2a6 6 0 0 1 6 6",
+          stroke: "currentColor",
+          strokeWidth: 1.5,
+          strokeLinecap: "round",
+        }),
+      );
+    }
     function reconcile(ids, saved = []) {
       const allowed = new Set(ids);
       return [...new Set([...saved.filter((id) => allowed.has(id)), ...ids])];
@@ -123,6 +151,7 @@ window.__ModuleLoader__.load({
       failure: "Operation failed",
       loading: "Loading…",
       completed: "Completed (unread)",
+      running: "Running",
       invalidOrder: "Invalid saved order",
       orderChanged:
         "Order changed during the operation. Pin state saved; drag again to reorder.",
@@ -157,6 +186,7 @@ window.__ModuleLoader__.load({
       failure: "操作失败",
       loading: "加载中…",
       completed: "已完成（未读）",
+      running: "运行中",
       invalidOrder: "保存的排序数据无效",
       orderChanged: "操作期间排序已变化。置顶状态已保存，请重新拖拽排序。",
     };
@@ -177,6 +207,16 @@ window.__ModuleLoader__.load({
       const [rename, setRename] = React.useState(null);
       const actionOrigin = React.useRef(null);
       const focusPending = React.useRef(false);
+      // Stable mount ref: focus the editor and select the whole title once, so
+      // typing replaces it instead of appending. Later renders keep the same
+      // function identity and never re-select while the user edits.
+      const focusRename = React.useRef(null);
+      if (!focusRename.current)
+        focusRename.current = (node) => {
+          if (!node) return;
+          node.focus();
+          node.select();
+        };
       const composing = React.useRef(false);
       function cancelRename() {
         if (lock.current) return;
@@ -458,6 +498,7 @@ window.__ModuleLoader__.load({
             {
               className: "gp-row",
               "data-selected": id === active,
+              "data-running": running ? "true" : undefined,
               "data-drop": indicator(key, ids, id),
               draggable:
                 !busy &&
@@ -477,7 +518,10 @@ window.__ModuleLoader__.load({
                 e.stopPropagation();
                 openMenu(
                   id,
-                  e.currentTarget.querySelector('[aria-haspopup="menu"]'),
+                  e.currentTarget.querySelector(".gp-title:not([disabled])") ||
+                    e.currentTarget.querySelector(
+                      ".gp-actions button:not([disabled])",
+                    ),
                 );
               },
               onDragStart: (e) => {
@@ -543,7 +587,7 @@ window.__ModuleLoader__.load({
                     },
                   },
                   h("input", {
-                    autoFocus: true,
+                    ref: focusRename.current,
                     "aria-label": t("rename"),
                     value: rename.value,
                     disabled: busy,
@@ -585,7 +629,6 @@ window.__ModuleLoader__.load({
                     title: title(id),
                     onClick: () => api.open(id),
                   },
-                  running ? "◌ " : null,
                   title(id),
                 ),
             completed &&
@@ -599,41 +642,45 @@ window.__ModuleLoader__.load({
               h(
                 "span",
                 { className: "gp-actions" },
+                running
+                  ? h(
+                      "span",
+                      {
+                        className: "gp-spin",
+                        role: "img",
+                        "aria-label": t("running"),
+                        title: t("running"),
+                      },
+                      spinnerIcon(),
+                    )
+                  : null,
                 h(
-                  "button",
-                  {
-                    disabled: busy || archived || Boolean(rename),
-                    title: t(pins.has(id) ? "unpin" : "pin"),
-                    "aria-label": t(pins.has(id) ? "unpin" : "pin"),
-                    onClick: () =>
-                      run(() => (pins.has(id) ? api.unpin(id) : api.pin(id))),
-                  },
-                  pinIcon(pins.has(id)),
-                ),
-                h(
-                  "button",
-                  {
-                    disabled: busy || Boolean(rename),
-                    title: t(archived ? "restore" : "archive"),
-                    "aria-label": t(archived ? "restore" : "archive"),
-                    onClick: () =>
-                      run(() => (archived ? api.restore(id) : api.archive(id))),
-                  },
-                  archiveIcon(),
-                ),
-                h(
-                  "button",
-                  {
-                    disabled: busy || Boolean(rename),
-                    "aria-label": t("more"),
-                    "aria-haspopup": "menu",
-                    "aria-expanded": menu === id,
-                    onClick: (e) =>
-                      menu === id
-                        ? closeMenu()
-                        : openMenu(id, e?.currentTarget),
-                  },
-                  "⋯",
+                  "span",
+                  { className: "gp-row-actions" },
+                  h(
+                    "button",
+                    {
+                      disabled: busy || archived || Boolean(rename),
+                      title: t(pins.has(id) ? "unpin" : "pin"),
+                      "aria-label": t(pins.has(id) ? "unpin" : "pin"),
+                      onClick: () =>
+                        run(() => (pins.has(id) ? api.unpin(id) : api.pin(id))),
+                    },
+                    pinIcon(pins.has(id)),
+                  ),
+                  h(
+                    "button",
+                    {
+                      disabled: busy || Boolean(rename),
+                      title: t(archived ? "restore" : "archive"),
+                      "aria-label": t(archived ? "restore" : "archive"),
+                      onClick: () =>
+                        run(() =>
+                          archived ? api.restore(id) : api.archive(id),
+                        ),
+                    },
+                    archiveIcon(),
+                  ),
                 ),
               ),
           ),
@@ -736,7 +783,7 @@ window.__ModuleLoader__.load({
           css +
             `
 .gp-row-wrap{position:relative}.gp-row-menu{position:absolute;right:0;top:100%;z-index:20;min-width:150px;display:flex;flex-direction:column;background:var(--dsw-alias-bg-overlay)}.gp-row-menu button{text-align:left}.gp-actions button{color:var(--dsw-alias-label-tertiary)}.gp-actions button:hover{color:var(--dsw-alias-label-primary)}
-.gp-rename{display:flex;align-items:center;flex:1;min-width:0}.gp-rename input{min-width:0;width:100%;flex:1}.gp-actions{flex:none}.gp-actions button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0}.gp-actions svg{flex:none}
+.gp-rename{display:flex;align-items:center;flex:1;min-width:0}.gp-rename input{min-width:0;width:100%;flex:1}.gp-actions{display:flex;align-items:center;justify-content:flex-end;flex:none;min-width:48px}.gp-row-actions{display:inline-flex;align-items:center}.gp-actions button{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0}.gp-actions svg{flex:none;display:block}.gp-spin{display:none;align-items:center;justify-content:center;width:24px;height:24px;color:var(--dsw-alias-label-tertiary)}.gp-row[data-running=true] .gp-spin{display:inline-flex}.gp-row[data-running=true] .gp-row-actions{display:none}.gp-row[data-running=true]:hover .gp-spin,.gp-row[data-running=true]:focus-within .gp-spin{display:none}.gp-row[data-running=true]:hover .gp-row-actions,.gp-row[data-running=true]:focus-within .gp-row-actions{display:inline-flex}.gp-spin svg{animation:gp-spin-frame 1s linear infinite}@keyframes gp-spin-frame{to{transform:rotate(360deg)}}@media (prefers-reduced-motion:reduce){.gp-spin svg{animation:none}}
 .gp-completed{width:6px;height:6px;flex:none;border-radius:50%;margin:0 5px;background:var(--dsw-alias-state-success-primary)}
 .gp-row,.gp-drop,.gp-group{position:relative}
 .gp [data-drop]::before{content:"";position:absolute;left:8px;right:8px;height:2px;background:var(--dsw-alias-brand-primary);z-index:2;pointer-events:none}
