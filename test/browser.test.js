@@ -10,6 +10,7 @@ function setup({
   pinned = ["a", "b"],
   order = ids,
   locale,
+  rename = async () => ({ ok: true }),
 } = {}) {
   let component,
     plugin,
@@ -77,28 +78,66 @@ function setup({
       },
     },
   );
-  let messages;
-  plugin.apply({
-    effect: (fn) => fn(),
-    locale: {
-      register: (_namespace, values) => {
-        messages = values;
-        return () => {};
+  let messages, injected;
+  const renameCalls = [];
+  const services = {
+    uiWorkspace: {},
+    workspaces: {},
+    remote: new Proxy(
+      {},
+      {
+        get(_target, key) {
+          assert.ok(
+            plugin.inject.includes(`remote.${key}`),
+            `cannot get property "remote.${key}" without inject`,
+          );
+          return {
+            rename: (input) => {
+              renameCalls.push(input);
+              return rename(input);
+            },
+          };
+        },
       },
-    },
-    slots: {
-      inject: (_name, fn) => fn(),
-      register: (options, fn) => {
-        assert.equal(options.name, "sidebar.workspaces");
-        assert.ok(
-          options.priority < 0,
-          "lowest priority must shadow built-in 0",
-        );
-        component = fn;
-        return () => {};
+    ),
+  };
+  plugin.apply(
+    new Proxy(
+      {
+        ...services,
+        effect: (fn) => fn(),
+        locale: {
+          register: (_namespace, values) => {
+            messages = values;
+            return () => {};
+          },
+        },
+        slots: {
+          inject: (_name, fn) => fn(),
+          register: (options, fn) => {
+            assert.equal(options.name, "sidebar.workspaces");
+            assert.ok(
+              options.priority < 0,
+              "lowest priority must shadow built-in 0",
+            );
+            component = fn;
+            injected = options.inject();
+            return () => {};
+          },
+        },
       },
-    },
-  });
+      {
+        get(target, key) {
+          if (key !== "effect")
+            assert.ok(
+              plugin.inject.includes(key),
+              `cannot get property "${key}" without inject`,
+            );
+          return target[key];
+        },
+      },
+    ),
+  );
   let resolvePin;
   const unpinCalls = [];
   const pinCalls = [];
@@ -126,6 +165,7 @@ function setup({
     useWorkspaces: (select) => select(ws),
     useSessionStatus: (select) => select(statuses),
     api: {
+      ...injected.api,
       unpin: async (id) => {
         unpinCalls.push(id);
       },
@@ -188,6 +228,8 @@ function setup({
     list,
     unpinCalls,
     pinCalls,
+    renameCalls,
+    api: injected.api,
     dragBefore,
     finishPin,
     saved: () => JSON.parse(storage.get(KEY)),
@@ -604,6 +646,390 @@ test("stale sources, foreign groups and folded groups reject insertion", () => {
     group().props.onDragOver(dragEvent());
     f.render();
     assert.equal(marker(f).length, 0);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("registered rename API declares its scoped remote dependency", async () => {
+  const f = setup();
+  try {
+    await f.api.rename("a", "Renamed");
+    assert.deepEqual(JSON.parse(JSON.stringify(f.renameCalls)), [
+      { sessionId: "a", title: "Renamed" },
+    ]);
+  } finally {
+    f.dispose();
+  }
+});
+
+function openRename(f, id = "a") {
+  f.nodes(f.row(id))
+    .find((n) => n.props["aria-label"] === "more")
+    .props.onClick();
+  f.render();
+  f.find(
+    (n) => n.type === "button" && n.children.includes("rename"),
+  ).props.onClick();
+  f.render();
+}
+const renameInput = (f) =>
+  f.find((n) => n.type === "input" && n.props["aria-label"] === "rename");
+const renameForm = (f) =>
+  f.find((n) => n.type === "form" && n.props.className === "gp-rename");
+const keyEvent = (key, extra = {}) => ({
+  key,
+  preventDefault() {},
+  stopPropagation() {},
+  ...extra,
+});
+
+test("session rename replaces title in its own row and saves through registered API", async () => {
+  const f = setup();
+  try {
+    openRename(f);
+    const input = renameInput(f);
+    const row = f.find(
+      (n) => n.props.className === "gp-row" && f.nodes(n).includes(input),
+    );
+    assert.equal(row.props.draggable, false);
+    assert.equal(
+      f.nodes(row).some((n) => n.props.className === "gp-title"),
+      false,
+    );
+    input.props.onChange({ target: { value: "  New name  " } });
+    f.render();
+    renameForm(f).props.onSubmit(keyEvent());
+    await settle(f);
+    assert.deepEqual(JSON.parse(JSON.stringify(f.renameCalls)), [
+      { sessionId: "a", title: "New name" },
+    ]);
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-rename"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("rename failure retains draft, pending blocks duplicates and Escape cancels", async () => {
+  let reply;
+  const f = setup({
+    rename: () =>
+      new Promise((resolve) => {
+        reply = resolve;
+      }),
+  });
+  try {
+    openRename(f);
+    renameInput(f).props.onChange({ target: { value: "Draft" } });
+    f.render();
+    renameForm(f).props.onSubmit(keyEvent());
+    renameForm(f).props.onSubmit(keyEvent());
+    f.render();
+    assert.equal(f.renameCalls.length, 1);
+    renameForm(f).props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    assert.equal(
+      renameInput(f).props.value,
+      "Draft",
+      "pending cancellation cannot hide a committing rename",
+    );
+    reply({ ok: false, error: { message: "Host refused" } });
+    await settle(f);
+    assert.equal(renameInput(f).props.value, "Draft");
+    assert.ok(
+      f
+        .nodes()
+        .some(
+          (n) =>
+            n.props.role === "alert" && n.children.includes("Host refused"),
+        ),
+    );
+    renameForm(f).props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-rename"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("IME Enter and empty rename never submit or start dragging", () => {
+  const f = setup();
+  try {
+    openRename(f);
+    const form = renameForm(f);
+    let prevented = 0;
+    form.props.onKeyDown(
+      keyEvent("Enter", {
+        nativeEvent: { isComposing: true },
+        preventDefault() {
+          prevented++;
+        },
+      }),
+    );
+    assert.equal(prevented, 1);
+    form.props.onDragStart(keyEvent());
+    renameInput(f).props.onChange({ target: { value: "   " } });
+    f.render();
+    renameForm(f).props.onSubmit(keyEvent());
+    assert.equal(f.renameCalls.length, 0);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("right-click and ellipsis open the same accessible actions and Escape restores focus", () => {
+  const f = setup();
+  try {
+    let prevented = 0,
+      focused = 0;
+    const origin = {
+      focus() {
+        focused++;
+      },
+    };
+    f.row("a").props.onContextMenu({
+      preventDefault() {
+        prevented++;
+      },
+      stopPropagation() {},
+      target: { closest: () => null },
+      currentTarget: { querySelector: () => origin },
+    });
+    f.render();
+    const menu = f.find((n) => n.props.role === "menu");
+    const actions = f
+      .nodes(menu)
+      .filter((n) => n.props.role === "menuitem")
+      .map((n) => n.children[0]);
+    assert.equal(prevented, 1);
+    assert.equal(f.row("a").props.draggable, false);
+    menu.props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    assert.equal(focused, 1);
+    assert.equal(
+      f.nodes().some((n) => n.props.role === "menu"),
+      false,
+    );
+    f.nodes(f.row("a"))
+      .find((n) => n.props["aria-label"] === "more")
+      .props.onClick({ currentTarget: origin });
+    f.render();
+    assert.deepEqual(
+      f
+        .nodes(f.find((n) => n.props.role === "menu"))
+        .filter((n) => n.props.role === "menuitem")
+        .map((n) => n.children[0]),
+      actions,
+    );
+    assert.ok(actions.includes("rename") && actions.includes("archive"));
+  } finally {
+    f.dispose();
+  }
+});
+
+test("inline input preserves native context menu", () => {
+  const f = setup();
+  try {
+    openRename(f);
+    const input = renameInput(f);
+    const row = f.find(
+      (n) => n.props.className === "gp-row" && f.nodes(n).includes(input),
+    );
+    let prevented = false;
+    row.props.onContextMenu({
+      target: { closest: () => ({}) },
+      preventDefault() {
+        prevented = true;
+      },
+    });
+    assert.equal(prevented, false);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("pin and native archive glyphs are both right-side 14px actions", () => {
+  const f = setup();
+  try {
+    for (const id of ["a", "new"]) {
+      const row = f.row(id);
+      const actions = row.children.find(
+        (n) => n?.props?.className === "gp-actions",
+      );
+      assert.ok(row.children.indexOf(actions) > 0);
+      for (const label of [id === "a" ? "unpin" : "pin", "archive"]) {
+        const icon = actions.children.find(
+          (n) => n.props["aria-label"] === label,
+        ).children[0];
+        assert.equal(icon.type, "svg");
+        assert.equal(icon.props.width, 14);
+        assert.equal(icon.props.height, 14);
+      }
+      const archive = actions.children.find(
+        (n) => n.props["aria-label"] === "archive",
+      ).children[0];
+      assert.equal(archive.children[2].props.d, "M6.5 9.5H9.5");
+    }
+  } finally {
+    f.dispose();
+  }
+});
+
+test("rejected rename retains draft and retries successfully with local focus restoration", async () => {
+  let calls = 0,
+    focused = 0;
+  const f = setup({
+    rename: async () => {
+      if (++calls === 1) throw new Error("Disconnected");
+      return { ok: true };
+    },
+  });
+  try {
+    f.nodes(f.row("a"))
+      .find((n) => n.props["aria-label"] === "more")
+      .props.onClick({
+        currentTarget: {
+          focus() {
+            focused++;
+          },
+        },
+      });
+    f.render();
+    f.find(
+      (n) => n.type === "button" && n.children.includes("rename"),
+    ).props.onClick();
+    f.render();
+    renameInput(f).props.onChange({ target: { value: "Retry title" } });
+    f.render();
+    renameForm(f).props.onSubmit(keyEvent());
+    await settle(f);
+    assert.equal(renameInput(f).props.value, "Retry title");
+    assert.ok(
+      f
+        .nodes()
+        .some(
+          (n) =>
+            n.props.role === "alert" && n.children.includes("Disconnected"),
+        ),
+    );
+    renameForm(f).props.onSubmit(keyEvent());
+    await settle(f);
+    assert.equal(calls, 2);
+    assert.equal(focused, 1);
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-rename"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("composition lifecycle guards Enter and Escape until composition ends", () => {
+  const f = setup();
+  try {
+    openRename(f);
+    renameInput(f).props.onCompositionStart();
+    renameForm(f).props.onKeyDown(keyEvent("Escape"));
+    renameForm(f).props.onSubmit(keyEvent());
+    f.render();
+    assert.equal(f.renameCalls.length, 0);
+    assert.ok(renameInput(f));
+    renameInput(f).props.onCompositionEnd();
+    renameForm(f).props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-rename"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("menu keyboard navigation and focus-out dismissal stay within owned menu", () => {
+  const f = setup();
+  try {
+    f.nodes(f.row("a"))
+      .find((n) => n.props["aria-label"] === "more")
+      .props.onClick();
+    f.render();
+    const menu = f.find((n) => n.props.role === "menu");
+    let focused = -1;
+    const items = [0, 1, 2].map((i) => ({
+      focus() {
+        focused = i;
+      },
+    }));
+    for (const [key, expected] of [
+      ["ArrowDown", 1],
+      ["ArrowUp", 2],
+      ["Home", 0],
+      ["End", 2],
+    ]) {
+      menu.props.onKeyDown(
+        keyEvent(key, {
+          target: items[0],
+          currentTarget: { querySelectorAll: () => items },
+        }),
+      );
+      assert.equal(focused, expected);
+    }
+    menu.props.onBlur({
+      currentTarget: { contains: () => false },
+      relatedTarget: null,
+    });
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.role === "menu"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("editing remains visible across search and blocks collapsing its row", () => {
+  const f = setup();
+  try {
+    openRename(f);
+    f.find((n) => n.props.type === "search").props.onChange({
+      target: { value: "no match" },
+    });
+    f.render();
+    assert.ok(renameInput(f));
+    const group = f.find(
+      (n) => n.props.className === "gp-group" && n.props.key === "w",
+    );
+    assert.equal(group.children[0].children[0].props.disabled, true);
+    f.find((n) => n.props.className === "gp").props.onKeyDown(
+      keyEvent("Escape"),
+    );
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-rename"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("row hover covers title and all actions without a title-only patch", () => {
+  const f = setup();
+  try {
+    const css = f.find((n) => n.type === "style").children.join("");
+    assert.match(
+      css,
+      /\.gp-row:hover[^{}]*\{background:var\(--dsw-alias-bg-layer-2\)\}/,
+    );
+    assert.match(css, /\.gp \.gp-title:hover\{background:transparent\}/);
   } finally {
     f.dispose();
   }
