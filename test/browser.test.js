@@ -11,6 +11,7 @@ function setup({
   order = ids,
   locale,
   rename = async () => ({ ok: true }),
+  search = async () => ({ ok: true, value: { items: [], hasMore: false } }),
 } = {}) {
   let component,
     plugin,
@@ -76,12 +77,27 @@ function setup({
         getItem: (key) => storage.get(key) ?? null,
         setItem: (key, value) => storage.set(key, value),
       },
+      AbortController,
+      setTimeout,
+      clearTimeout,
     },
   );
   let messages, injected;
-  const renameCalls = [];
+  const renameCalls = [],
+    openCalls = [],
+    searchCalls = [];
   const services = {
-    uiWorkspace: {},
+    uiWorkspace: {
+      openSession: (id) => openCalls.push(id),
+      startSession: () => {},
+    },
+    sessions: {
+      searchResultLimit: 20,
+      search: (query, signal) => {
+        searchCalls.push({ query, signal });
+        return search(query, signal);
+      },
+    },
     workspaces: {},
     remote: new Proxy(
       {},
@@ -229,6 +245,8 @@ function setup({
     unpinCalls,
     pinCalls,
     renameCalls,
+    openCalls,
+    searchCalls,
     api: injected.api,
     dragBefore,
     finishPin,
@@ -1029,27 +1047,332 @@ test("menu keyboard navigation and focus-out dismissal stay within owned menu", 
   }
 });
 
-test("editing remains visible across search and blocks collapsing its row", () => {
+const findDialog = (f) => f.find((n) => n.props.role === "dialog");
+const findInput = (f) =>
+  f.find((n) => n.props["aria-controls"] === "gp-find-results");
+const findRows = (f) => f.nodes().filter((n) => n.props.role === "option");
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const SEARCH_WAIT = 260;
+function openFind(f) {
+  f.find((n) => n.props.className === "gp-search-open").props.onClick();
+  f.render();
+}
+
+test("pinned header opens the search overlay and Escape restores focus", () => {
+  const f = setup();
+  try {
+    let focused = 0;
+    const trigger = f.find((n) => n.props.className === "gp-search-open");
+    assert.equal(trigger.props["aria-label"], "searchOpen");
+    trigger.props.ref.current = { focus: () => focused++ };
+    openFind(f);
+    const dialog = findDialog(f);
+    assert.equal(dialog.props["aria-modal"], "true");
+    assert.equal(findInput(f).props.placeholder, "searchPlaceholder");
+    dialog.props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.role === "dialog"),
+      false,
+    );
+    assert.equal(focused, 1);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("search debounces, keeps local matches first and appends content hits", async () => {
+  let resolve;
+  const f = setup({
+    ids: ["a", "b", "g"],
+    pinned: [],
+    search: (query) =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  });
+  try {
+    f.list.byId.a.title = "Alpha release";
+    f.list.byId.b.title = "Beta notes";
+    f.list.byId.g.title = "Gamma";
+    openFind(f);
+    assert.equal(f.searchCalls.length, 0, "no request before typing");
+    findInput(f).props.onChange({ target: { value: "alp" } });
+    f.render();
+    assert.equal(f.searchCalls.length, 0, "debounced");
+    assert.deepEqual(
+      findRows(f).map((n) => n.props.key),
+      ["a"],
+      "name matches show before the content request resolves",
+    );
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-find-status"),
+      false,
+      "no empty-state text while local rows exist",
+    );
+    await wait(SEARCH_WAIT);
+    assert.equal(f.searchCalls.length, 1);
+    assert.equal(f.searchCalls[0].query, "alp");
+    resolve({
+      ok: true,
+      value: {
+        items: [{ sessionId: "g", snippet: "gamma alpha snippet" }],
+        hasMore: false,
+      },
+    });
+    await settle(f);
+    assert.deepEqual(
+      findRows(f).map((n) => n.props.key),
+      ["a", "g"],
+    );
+    assert.ok(
+      f
+        .nodes(findRows(f)[1])
+        .some(
+          (n) =>
+            n.props.className === "gp-find-snippet" &&
+            n.children[0] === "gamma alpha snippet",
+        ),
+    );
+    assert.deepEqual(
+      f
+        .nodes()
+        .filter((n) => n.props.className === "gp-find-group")
+        .map((n) => n.children[0]),
+      ["groupSessions", "groupContent"],
+      "results are split by a small group heading",
+    );
+    assert.equal(findDialog(f).props["aria-label"], "searchOpen");
+  } finally {
+    f.dispose();
+  }
+});
+
+test("Enter opens the highlighted result and closes the overlay", async () => {
+  const f = setup({
+    ids: ["a", "b", "g"],
+    pinned: [],
+    search: async () => ({ ok: true, value: { items: [], hasMore: false } }),
+  });
+  try {
+    f.list.byId.g.title = "Gamma";
+    openFind(f);
+    findInput(f).props.onChange({ target: { value: "gam" } });
+    f.render();
+    await wait(SEARCH_WAIT);
+    await settle(f);
+    assert.deepEqual(
+      findRows(f).map((n) => n.props.key),
+      ["g"],
+    );
+    findDialog(f).props.onKeyDown(keyEvent("Enter"));
+    f.render();
+    assert.equal(f.openCalls.length, 1);
+    assert.equal(f.openCalls[0], "g");
+    assert.equal(
+      f.nodes().some((n) => n.props.role === "dialog"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("search reports failures, empty results and hidden archived sessions", async () => {
+  const failing = setup({
+    ids: ["a"],
+    pinned: [],
+    search: async () => ({ ok: false, error: { message: "boom" } }),
+  });
+  try {
+    openFind(failing);
+    findInput(failing).props.onChange({ target: { value: "zzz" } });
+    failing.render();
+    await wait(SEARCH_WAIT);
+    await settle(failing);
+    const status = failing.find((n) => n.props.className === "gp-find-status");
+    assert.match(String(status.children[0]), /boom/);
+  } finally {
+    failing.dispose();
+  }
+
+  const empty = setup({ ids: ["a"], pinned: [] });
+  try {
+    openFind(empty);
+    findInput(empty).props.onChange({ target: { value: "zzz" } });
+    empty.render();
+    await wait(SEARCH_WAIT);
+    await settle(empty);
+    assert.equal(
+      empty.find((n) => n.props.className === "gp-find-status").children[0],
+      "noMatches",
+    );
+  } finally {
+    empty.dispose();
+  }
+
+  const archived = setup({
+    ids: ["a", "g"],
+    pinned: [],
+    search: async () => ({
+      ok: true,
+      value: {
+        items: [{ sessionId: "g", snippet: "archived alpha" }],
+        hasMore: false,
+      },
+    }),
+  });
+  try {
+    archived.list.byId.g.title = "Gamma";
+    archived.ws.archivedSessionIds = ["g"];
+    openFind(archived);
+    findInput(archived).props.onChange({ target: { value: "gam" } });
+    archived.render();
+    await wait(SEARCH_WAIT);
+    await settle(archived);
+    assert.equal(findRows(archived).length, 0);
+  } finally {
+    archived.dispose();
+  }
+});
+
+test("a deployment without the content index keeps name matches and explains it", async () => {
+  const f = setup({
+    ids: ["a", "b"],
+    pinned: [],
+    search: async () => ({
+      ok: false,
+      error: {
+        message:
+          'session search failed: SessionQueryError: session search is disabled: this deployment configures the session-query index with openAt "never"',
+      },
+    }),
+  });
+  try {
+    f.list.byId.a.title = "星富通";
+    f.list.byId.b.title = "星富通慢查询";
+    f.ws.archivedSessionIds = ["b"];
+    openFind(f);
+    findInput(f).props.onChange({ target: { value: "星富通" } });
+    f.render();
+    await wait(SEARCH_WAIT);
+    await settle(f);
+    assert.deepEqual(
+      findRows(f).map((n) => n.props.key),
+      ["a"],
+      "name matches stay usable",
+    );
+    const note = f.nodes().find((n) => n.props.className === "gp-find-status");
+    assert.equal(note.children[0], "contentDisabled");
+    assert.match(note.props.title, /session search is disabled/);
+    assert.equal(
+      f
+        .nodes()
+        .some((n) => n.children[0] === "searchFailed: " + note.props.title),
+      false,
+      "a disabled index is not reported as a failure",
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("search trigger and group collapse are disabled while renaming", () => {
   const f = setup();
   try {
     openRename(f);
-    f.find((n) => n.props.type === "search").props.onChange({
-      target: { value: "no match" },
-    });
+    const trigger = f.find((n) => n.props.className === "gp-search-open");
+    assert.equal(trigger.props.disabled, true);
+    trigger.props.onClick();
     f.render();
-    assert.ok(renameInput(f));
+    assert.equal(
+      f.nodes().some((n) => n.props.role === "dialog"),
+      false,
+    );
     const group = f.find(
       (n) => n.props.className === "gp-group" && n.props.key === "w",
     );
     assert.equal(group.children[0].children[0].props.disabled, true);
-    f.find((n) => n.props.className === "gp").props.onKeyDown(
-      keyEvent("Escape"),
-    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("search clamps the query to the Host contract and strips NUL", async () => {
+  const f = setup({ ids: ["a"], pinned: [] });
+  try {
+    openFind(f);
+    findInput(f).props.onChange({
+      target: { value: "x".repeat(600) + "\0tail" },
+    });
     f.render();
+    await wait(SEARCH_WAIT);
+    assert.equal(f.searchCalls.length, 1);
+    assert.equal(f.searchCalls[0].query.length, 500);
+    assert.equal(f.searchCalls[0].query.includes("\0"), false);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("search dedupes content hits and announces a truncated list", async () => {
+  const ids = Array.from({ length: 21 }, (_, i) => `s${i}`);
+  const f = setup({
+    ids,
+    pinned: [],
+    search: async () => ({
+      ok: true,
+      value: {
+        items: [{ sessionId: "s0", snippet: "duplicate snippet" }],
+        hasMore: false,
+      },
+    }),
+  });
+  try {
+    for (const id of ids) f.list.byId[id].title = `match ${id}`;
+    openFind(f);
+    findInput(f).props.onChange({ target: { value: "match" } });
+    f.render();
+    await wait(SEARCH_WAIT);
+    await settle(f);
+    const rows = findRows(f);
+    assert.equal(rows.length, 20);
+    assert.equal(rows.filter((n) => n.props.key === "s0").length, 1);
     assert.equal(
-      f.nodes().some((n) => n.props.className === "gp-rename"),
-      false,
+      f
+        .nodes()
+        .some(
+          (n) =>
+            n.props.className === "gp-find-status" &&
+            n.children[0] === "searchMore",
+        ),
+      true,
     );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("closing the overlay aborts the in-flight request", async () => {
+  let signal;
+  const f = setup({
+    ids: ["a"],
+    pinned: [],
+    search: (query, incoming) =>
+      new Promise(() => {
+        signal = incoming;
+      }),
+  });
+  try {
+    openFind(f);
+    findInput(f).props.onChange({ target: { value: "zzz" } });
+    f.render();
+    await wait(SEARCH_WAIT);
+    assert.equal(f.searchCalls.length, 1);
+    assert.equal(signal.aborted, false);
+    findDialog(f).props.onKeyDown(keyEvent("Escape"));
+    f.render();
+    assert.equal(signal.aborted, true);
   } finally {
     f.dispose();
   }
