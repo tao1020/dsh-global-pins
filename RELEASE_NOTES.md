@@ -1,3 +1,16 @@
+# v1.0.4
+
+- Add a search overlay behind the magnifier beside the "Global pins" heading. It searches conversation titles and workspace names locally, then the Host message-content index, with the same 20-result bound as the native browser.
+- Title matches list first under a small "Sessions" heading in last-updated order; content-only hits follow under a "Content" heading with a snippet, and duplicates appear once. Queries are trimmed, stripped of NUL and clamped to 500 UTF-16 units; typing is debounced by 250ms and superseded or closed requests abort. When a deployment turns the session-query index off (openAt "never"), the overlay keeps the name matches and shows a short note instead of a failure.
+- Up/Down select, Enter opens the highlighted conversation and closes the overlay, Escape closes and returns focus to the magnifier, and Tab stays inside the dialog. Loading, empty, error and "narrow your search" states are announced.
+- Archived conversations and blank drafts stay out of results.
+
+All 62 automated tests pass on Node 22. Syntax, formatting, package checks, and independent engineering review pass. Automated tests exercise the VM harness only; the real overlay layout, snippets from the Host index, and focus behavior in the desktop app still need the user's visual confirmation.
+
+Download the `.tgz` asset and install its URL in Harness. Tested with DeepSeek Harness 0.2.1-rc.5. No build step is needed.
+
+This plugin replaces the workspace browser. The native search dialog's filter tabs, saved searches and result grouping, workspace tree mode, custom row slots, child-activity/scheduled-task indicators, and approval/question badges are not preserved; see README compatibility limits. Sorting preferences are browser-local. Disable the bundle to restore the original browser.
+
 # v1.0.3
 
 - Running conversations show a continuously animated spinning ring on the row's right instead of the faint "◌" glyph before the title.

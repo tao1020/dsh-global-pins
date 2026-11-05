@@ -77,6 +77,32 @@ window.__ModuleLoader__.load({
         }),
       );
     }
+    // Shipped magnifier artwork for the search trigger.
+    function searchIcon() {
+      return h(
+        "svg",
+        {
+          width: 14,
+          height: 14,
+          viewBox: "0 0 16 16",
+          fill: "none",
+          strokeWidth: 1.2,
+          "aria-hidden": "true",
+          focusable: "false",
+        },
+        h("circle", {
+          cx: 6.75,
+          cy: 6.75,
+          r: 4.25,
+          stroke: "currentColor",
+        }),
+        h("path", {
+          d: "M10.25 10.25L14 14",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+        }),
+      );
+    }
     function reconcile(ids, saved = []) {
       const allowed = new Set(ids);
       return [...new Set([...saved.filter((id) => allowed.has(id)), ...ids])];
@@ -126,7 +152,17 @@ window.__ModuleLoader__.load({
       recent: "Last updated",
       manual: "Manual order",
       empty: "Pin a conversation or drag it here",
-      search: "Search conversations",
+      searchOpen: "Search sessions and content",
+      searchPlaceholder: "Search session names or content",
+      searching: "Searching session history…",
+      noMatches: "No matching sessions",
+      searchMore: "Showing the first {n} results. Narrow your search.",
+      searchFailed: "Search failed",
+      groupSessions: "Sessions",
+      groupContent: "Content",
+      contentDisabled:
+        "Message-content search is disabled in this deployment; showing name matches only.",
+      searchHint: "↑↓ to select · Enter to open · Esc to close",
       new: "New session",
       add: "Add workspace",
       pin: "Pin",
@@ -162,7 +198,16 @@ window.__ModuleLoader__.load({
       recent: "最近更新",
       manual: "手动排序",
       empty: "置顶会话或拖拽到这里",
-      search: "搜索会话",
+      searchOpen: "搜索会话和内容",
+      searchPlaceholder: "搜索会话名称或内容",
+      searching: "正在搜索会话历史…",
+      noMatches: "无匹配会话",
+      searchMore: "仅显示前 {n} 条结果，请缩小搜索范围。",
+      searchFailed: "搜索失败",
+      groupSessions: "会话",
+      groupContent: "内容",
+      contentDisabled: "此部署未启用消息内容索引，只能匹配会话名称。",
+      searchHint: "↑↓ 选择 · Enter 打开 · Esc 关闭",
       new: "新会话",
       add: "添加工作区",
       pin: "置顶",
@@ -190,7 +235,7 @@ window.__ModuleLoader__.load({
       invalidOrder: "保存的排序数据无效",
       orderChanged: "操作期间排序已变化。置顶状态已保存，请重新拖拽排序。",
     };
-    const css = `.gp{min-height:0;overflow:auto;padding:8px;font:inherit;color:var(--dsw-alias-label-primary);flex:1}.gp button,.gp input,.gp select{font:inherit;color:inherit}.gp button{cursor:pointer;background:transparent;border:0;border-radius:7px;padding:6px}.gp button:hover,.gp-row:hover,.gp-row[data-selected=true]{background:var(--dsw-alias-bg-layer-2)}.gp .gp-title:hover{background:transparent}.gp button:focus-visible,.gp input:focus-visible,.gp select:focus-visible{outline:2px solid currentColor;outline-offset:1px}.gp-header{display:flex;align-items:center;gap:4px;margin:12px 0 5px}.gp-header strong{flex:1;font-size:13px;color:var(--dsw-alias-label-secondary)}.gp input,.gp select{box-sizing:border-box;max-width:100%;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:5px}.gp-search{width:100%}.gp-row{display:flex;align-items:center;min-height:36px;border-radius:8px;gap:2px}.gp-title{flex:1;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gp-actions{display:flex;align-items:center}.gp-menu{padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;display:flex;flex-wrap:wrap}.gp-note{font-size:12px;color:var(--dsw-alias-label-secondary);padding:8px}.gp-error{padding:8px;overflow-wrap:anywhere;border:1px solid currentColor}.gp-drop{min-height:40px;border-radius:8px}.gp-group{margin-top:12px}.gp-row[draggable=true]{cursor:grab}.gp-sort{position:relative}.gp-sort summary{list-style:none;cursor:pointer;border-radius:7px;padding:4px 8px;font-size:20px;line-height:1}.gp-sort summary::-webkit-details-marker{display:none}.gp-sort summary:hover{background:var(--dsw-alias-bg-layer-2)}.gp-sort summary:focus-visible{outline:2px solid currentColor}.gp-sort-options{position:absolute;right:0;top:100%;z-index:10;min-width:160px;padding:5px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);border-radius:12px}.gp-sort-options button{display:flex;justify-content:space-between;gap:20px;width:100%;text-align:left;padding:9px}.gp-sort-options span{width:1em}`;
+    const css = `.gp{min-height:0;overflow:auto;padding:8px;font:inherit;color:var(--dsw-alias-label-primary);flex:1}.gp button,.gp input,.gp select{font:inherit;color:inherit}.gp button{cursor:pointer;background:transparent;border:0;border-radius:7px;padding:6px}.gp button:hover,.gp-row:hover,.gp-row[data-selected=true]{background:var(--dsw-alias-bg-layer-2)}.gp .gp-title:hover{background:transparent}.gp button:focus-visible,.gp input:focus-visible,.gp select:focus-visible{outline:2px solid currentColor;outline-offset:1px}.gp-header{display:flex;align-items:center;gap:4px;margin:12px 0 5px}.gp-header strong{flex:1;font-size:13px;color:var(--dsw-alias-label-secondary)}.gp input,.gp select{box-sizing:border-box;max-width:100%;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:5px}.gp-row{display:flex;align-items:center;min-height:36px;border-radius:8px;gap:2px}.gp-title{flex:1;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gp-actions{display:flex;align-items:center}.gp-menu{padding:4px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;display:flex;flex-wrap:wrap}.gp-note{font-size:12px;color:var(--dsw-alias-label-secondary);padding:8px}.gp-error{padding:8px;overflow-wrap:anywhere;border:1px solid currentColor}.gp-drop{min-height:40px;border-radius:8px}.gp-group{margin-top:12px}.gp-row[draggable=true]{cursor:grab}.gp-sort{position:relative}.gp-sort summary{list-style:none;cursor:pointer;border-radius:7px;padding:4px 8px;font-size:20px;line-height:1}.gp-sort summary::-webkit-details-marker{display:none}.gp-sort summary:hover{background:var(--dsw-alias-bg-layer-2)}.gp-sort summary:focus-visible{outline:2px solid currentColor}.gp-sort-options{position:absolute;right:0;top:100%;z-index:10;min-width:160px;padding:5px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);border-radius:12px}.gp-sort-options button{display:flex;justify-content:space-between;gap:20px;width:100%;text-align:left;padding:9px}.gp-sort-options span{width:1em}.gp-search-open{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0}.gp-find{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-start;justify-content:center;padding:12vh 16px 16px;background:rgba(0,0,0,.28)}.gp-find-panel{display:flex;flex-direction:column;width:min(680px,100%);max-height:64vh;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden}.gp-find-input{margin:10px;padding:9px 11px;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;background:var(--dsw-alias-bg-base)}.gp-find-results{overflow:auto;padding:0 6px 6px}.gp-find-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title where" "snippet snippet";gap:2px 10px;width:100%;padding:8px 10px;border-radius:8px;text-align:left}.gp-find-row[data-active=true]{background:var(--dsw-alias-bg-layer-2)}.gp-find-title{grid-area:title;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gp-find-where{grid-area:where;font-size:12px;color:var(--dsw-alias-label-secondary)}.gp-find-snippet{grid-area:snippet;font-size:12px;color:var(--dsw-alias-label-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gp-find-group{padding:10px 12px 2px;font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--dsw-alias-label-secondary)}.gp-find-status{padding:6px 12px;font-size:12px;color:var(--dsw-alias-label-secondary)}.gp-find-hint{border-top:1px solid var(--dsw-alias-border-l1);padding:7px 12px;font-size:12px;color:var(--dsw-alias-label-secondary)}`;
     function Browser(p) {
       const { t, api } = p,
         list = p.useSessions((s) => s),
@@ -225,12 +270,15 @@ window.__ModuleLoader__.load({
         focusPending.current = true;
       }
       const [error, setError] = React.useState(""),
-        [query, setQuery] = React.useState(""),
         [showArchived, setShowArchived] = React.useState(false),
         [fold, setFold] = React.useState({}),
         [menu, setMenu] = React.useState(null),
         [busy, setBusy] = React.useState(false),
-        [over, setOver] = React.useState(null);
+        [over, setOver] = React.useState(null),
+        [find, setFind] = React.useState(null),
+        [hits, setHits] = React.useState(null);
+      const findInput = React.useRef(null),
+        findTrigger = React.useRef(null);
       React.useEffect(() => {
         // Wait until React re-enables the row action after rename/pending state.
         if (focusPending.current && !busy && !rename && !menu) {
@@ -326,14 +374,11 @@ window.__ModuleLoader__.load({
         (!byId[id].blank || id === active);
       const title = (id) =>
         byId[id]?.title || t(byId[id]?.blank ? "new" : "untitled");
+      const label = (id) =>
+        groups.find((g) => g.workspaceId === owner.get(id))?.title ??
+        t("ungrouped");
       const visible = (id) =>
-        valid(id) &&
-        (rename?.id === id || showArchived || !archives.has(id)) &&
-        (rename?.id === id ||
-          !query ||
-          `${title(id)} ${groups.find((g) => g.workspaceId === owner.get(id))?.title ?? ""}`
-            .toLowerCase()
-            .includes(query.toLowerCase()));
+        valid(id) && (rename?.id === id || showArchived || !archives.has(id));
       function ordered(ids, key) {
         return prefs.mode === "recent"
           ? recent(ids, byId)
@@ -371,6 +416,196 @@ window.__ModuleLoader__.load({
           (id) =>
             visible(id) && eligible(id) && (key === "pins" || !pins.has(id)),
         );
+      }
+      // Search: local title/Workspace matches plus Host message-content hits.
+      // Archived conversations stay out of results, like the default list.
+      const SEARCH_DEBOUNCE_MS = 250,
+        SEARCH_LIMIT = 20,
+        SEARCH_MAX_CODE_UNITS = 500;
+      // Keep the sent phrase inside the Host's session.search contract: strip
+      // NUL and cap length without splitting a surrogate pair.
+      function sanitizeQuery(value) {
+        const withoutNul = value.replaceAll("\0", "");
+        if (withoutNul.length <= SEARCH_MAX_CODE_UNITS) return withoutNul;
+        let end = SEARCH_MAX_CODE_UNITS;
+        const last = withoutNul.charCodeAt(end - 1),
+          next = withoutNul.charCodeAt(end);
+        if (
+          last >= 0xd800 &&
+          last <= 0xdbff &&
+          next >= 0xdc00 &&
+          next <= 0xdfff
+        )
+          end--;
+        return withoutNul.slice(0, end);
+      }
+      const searchText = find === null ? "" : sanitizeQuery(find.query).trim();
+      const limit = api.searchLimit?.() > 0 ? api.searchLimit() : SEARCH_LIMIT;
+      React.useEffect(() => {
+        if (searchText === "") {
+          setHits(null);
+          return;
+        }
+        const controller = new AbortController();
+        let cancelled = false;
+        setHits({
+          query: searchText,
+          status: "loading",
+          items: [],
+          hasMore: false,
+          error: "",
+        });
+        const timer = setTimeout(() => {
+          api
+            .searchContent(searchText, controller.signal)
+            .then((result) => {
+              if (cancelled) return;
+              setHits({
+                query: searchText,
+                status: "ready",
+                items: result.items,
+                hasMore: result.hasMore,
+                error: "",
+              });
+            })
+            .catch((reason) => {
+              if (cancelled || controller.signal.aborted) return;
+              const message = String(reason?.message || reason);
+              // Deployments can turn the session-query index off (openAt
+              // "never"). That is a configuration, not a failure: keep the
+              // name matches and explain the missing content results.
+              const disabled =
+                /session search is disabled|session-query index/i.test(message);
+              setHits({
+                query: searchText,
+                status: disabled ? "disabled" : "error",
+                items: [],
+                hasMore: false,
+                error: message,
+              });
+            });
+        }, SEARCH_DEBOUNCE_MS);
+        return () => {
+          cancelled = true;
+          clearTimeout(timer);
+          controller.abort();
+        };
+      }, [searchText, find !== null, api]);
+      React.useEffect(() => {
+        if (find !== null) findInput.current?.focus?.();
+      }, [find !== null]);
+      function searchRows() {
+        if (searchText === "") return { total: 0, rows: [] };
+        const q = searchText.toLowerCase();
+        const include = (id) =>
+          valid(id) && !byId[id].blank && !archives.has(id);
+        const snippetOf = new Map();
+        const content =
+          hits && hits.query === searchText && hits.status === "ready"
+            ? hits.items
+            : [];
+        for (const item of content)
+          if (!snippetOf.has(item.sessionId))
+            snippetOf.set(item.sessionId, item.snippet || "");
+        const ids = [],
+          groups = new Map(),
+          seen = new Set();
+        for (const id of recent(
+          list.ids.filter(
+            (id) =>
+              include(id) &&
+              (title(id).toLowerCase().includes(q) ||
+                label(id).toLowerCase().includes(q)),
+          ),
+          byId,
+        )) {
+          seen.add(id);
+          ids.push(id);
+          groups.set(id, "sessions");
+        }
+        for (const id of snippetOf.keys())
+          if (!seen.has(id) && include(id)) {
+            ids.push(id);
+            groups.set(id, "content");
+          }
+        return {
+          total: ids.length,
+          rows: ids.slice(0, limit).map((id) => ({
+            id,
+            group: groups.get(id) || "sessions",
+            title: title(id),
+            workspace: label(id),
+            snippet: snippetOf.get(id) || "",
+          })),
+        };
+      }
+      function openFind() {
+        if (lock.current || busy || rename) return;
+        setMenu(null);
+        setFind({ query: "", active: 0 });
+      }
+      function closeFind() {
+        setFind(null);
+        setHits(null);
+        findTrigger.current?.focus?.();
+      }
+      function openResult(id) {
+        setFind(null);
+        setHits(null);
+        api.open(id);
+      }
+      function findKeys(e) {
+        const { rows } = searchRows(),
+          active = find === null ? 0 : find.active;
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation?.();
+          closeFind();
+        } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          const delta = e.key === "ArrowDown" ? 1 : -1;
+          setFind(
+            (f) =>
+              f && {
+                ...f,
+                active: Math.max(
+                  0,
+                  Math.min(Math.max(0, rows.length - 1), f.active + delta),
+                ),
+              },
+          );
+        } else if (e.key === "Enter") {
+          const row = rows[Math.min(active, Math.max(0, rows.length - 1))];
+          if (row) {
+            e.preventDefault();
+            openResult(row.id);
+          }
+        } else if (
+          e.key === "Tab" &&
+          typeof document !== "undefined" &&
+          e.currentTarget
+        ) {
+          const focusable = [
+            ...e.currentTarget.querySelectorAll(
+              "button:not(:disabled), input:not(:disabled)",
+            ),
+          ];
+          const first = focusable[0],
+            last = focusable[focusable.length - 1];
+          if (!first) return;
+          if (first === last) {
+            e.preventDefault();
+            first.focus();
+            return;
+          }
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
       function target(key, ids, rowId, e) {
         const id = drag.current;
@@ -855,14 +1090,6 @@ window.__ModuleLoader__.load({
             "+ " + t("add"),
           ),
         ),
-        h("input", {
-          className: "gp-search",
-          type: "search",
-          value: query,
-          placeholder: t("search"),
-          "aria-label": t("search"),
-          onChange: (e) => setQuery(e.target.value),
-        }),
         (ws.phase !== "ready" || ws.state === "loading") &&
           h("div", { className: "gp-note", role: "status" }, t("loading")),
         ws.error &&
@@ -883,6 +1110,18 @@ window.__ModuleLoader__.load({
           "div",
           { className: "gp-header" },
           h("strong", null, t("pins")),
+          h(
+            "button",
+            {
+              ref: findTrigger,
+              className: "gp-search-open",
+              title: t("searchOpen"),
+              "aria-label": t("searchOpen"),
+              disabled: busy || Boolean(rename),
+              onClick: openFind,
+            },
+            searchIcon(),
+          ),
           h(
             "details",
             {
@@ -1047,6 +1286,139 @@ window.__ModuleLoader__.load({
           }),
           t("archived"),
         ),
+        find !== null &&
+          h(
+            "div",
+            {
+              className: "gp-find",
+              onMouseDown: (e) => {
+                if (e.target === e.currentTarget) closeFind();
+              },
+            },
+            (() => {
+              const { rows, total } = searchRows(),
+                active = Math.min(find.active, Math.max(0, rows.length - 1));
+              const pending =
+                searchText !== "" &&
+                (!hits ||
+                  hits.query !== searchText ||
+                  hits.status === "loading");
+              const failed =
+                hits && hits.query === searchText && hits.status === "error"
+                  ? hits.error
+                  : "";
+              const ready =
+                Boolean(hits) &&
+                hits.query === searchText &&
+                hits.status === "ready";
+              const disabled =
+                Boolean(hits) &&
+                hits.query === searchText &&
+                hits.status === "disabled";
+              const statusText =
+                pending && rows.length === 0
+                  ? t("searching")
+                  : failed
+                    ? t("searchFailed") + ": " + failed
+                    : disabled
+                      ? t("contentDisabled")
+                      : ready && rows.length === 0
+                        ? t("noMatches")
+                        : "";
+              return h(
+                "div",
+                {
+                  className: "gp-find-panel",
+                  role: "dialog",
+                  "aria-modal": "true",
+                  "aria-label": t("searchOpen"),
+                  onKeyDown: findKeys,
+                },
+                h("input", {
+                  ref: findInput,
+                  className: "gp-find-input",
+                  type: "search",
+                  value: find.query,
+                  placeholder: t("searchPlaceholder"),
+                  "aria-label": t("searchPlaceholder"),
+                  "aria-controls": "gp-find-results",
+                  onChange: (e) =>
+                    setFind({ ...find, query: e.target.value, active: 0 }),
+                }),
+                h(
+                  "div",
+                  {
+                    id: "gp-find-results",
+                    className: "gp-find-results",
+                    role: "listbox",
+                    "aria-label": t("searchOpen"),
+                  },
+                  rows.map((row, i) => {
+                    const header =
+                      i === 0 || row.group !== rows[i - 1].group
+                        ? h(
+                            "div",
+                            {
+                              key: "group-" + row.group,
+                              className: "gp-find-group",
+                              role: "presentation",
+                            },
+                            row.group === "content"
+                              ? t("groupContent")
+                              : t("groupSessions"),
+                          )
+                        : null;
+                    return [
+                      header,
+                      h(
+                        "button",
+                        {
+                          key: row.id,
+                          role: "option",
+                          "aria-selected": i === active,
+                          "data-active": i === active ? "true" : undefined,
+                          className: "gp-find-row",
+                          onClick: () => openResult(row.id),
+                        },
+                        h("span", { className: "gp-find-title" }, row.title),
+                        h(
+                          "span",
+                          { className: "gp-find-where" },
+                          row.workspace,
+                        ),
+                        row.snippet
+                          ? h(
+                              "span",
+                              { className: "gp-find-snippet" },
+                              row.snippet,
+                            )
+                          : null,
+                      ),
+                    ];
+                  }),
+                ),
+                statusText
+                  ? h(
+                      "div",
+                      {
+                        className: "gp-find-status",
+                        role: "status",
+                        title: disabled ? hits.error : undefined,
+                      },
+                      statusText,
+                    )
+                  : null,
+                ready &&
+                  (hits.hasMore || total > limit) &&
+                  h(
+                    "div",
+                    { className: "gp-find-status", role: "status" },
+                    t("searchMore").replace("{n}", String(limit)),
+                  ),
+                h("div", { className: "gp-find-hint" }, t("searchHint")),
+              );
+            })(),
+          ),
       );
     }
     return {
@@ -1055,6 +1427,7 @@ window.__ModuleLoader__.load({
         "locale",
         "uiWorkspace",
         "workspaces",
+        "sessions",
         "remote",
         "remote.session",
       ],
@@ -1070,6 +1443,15 @@ window.__ModuleLoader__.load({
               inject: () => ({
                 api: {
                   open: (id) => ctx.uiWorkspace.openSession(id),
+                  searchLimit: () => ctx.sessions.searchResultLimit,
+                  searchContent: async (query, signal) => {
+                    const r = await ctx.sessions.search(query, signal);
+                    if (!r.ok) throw new Error(r.error.message);
+                    return {
+                      items: r.value.items,
+                      hasMore: r.value.hasMore,
+                    };
+                  },
                   start: (id) => ctx.uiWorkspace.startSession(id),
                   pin: (id) => ctx.workspaces.pinSession(id),
                   unpin: (id) => ctx.workspaces.unpinSession(id),
