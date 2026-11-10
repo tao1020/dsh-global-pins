@@ -1509,3 +1509,71 @@ test("row hover covers title and all actions without a title-only patch", () => 
     f.dispose();
   }
 });
+
+test("the locator stays disabled until a row is the current session", () => {
+  const f = setup();
+  try {
+    const button = f.find((n) => n.props.className === "gp-locate");
+    assert.equal(button.props["aria-label"], "locate");
+    assert.equal(button.props.disabled, true);
+    f.list.byId.b.retainedBy.mainView = 1;
+    f.render();
+    assert.equal(
+      f.find((n) => n.props.className === "gp-locate").props.disabled,
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("locating expands the collapsed workspace holding the current session", () => {
+  const f = setup({ ids: ["a", "b"], pinned: [] });
+  try {
+    f.list.byId.b.retainedBy.mainView = 1;
+    f.render();
+    f.find(
+      (n) => typeof n.props["aria-expanded"] === "boolean",
+    ).props.onClick();
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-row"),
+      false,
+    );
+    f.find((n) => n.props.className === "gp-locate").props.onClick();
+    f.render();
+    assert.equal(
+      f.find((n) => typeof n.props["aria-expanded"] === "boolean").props[
+        "aria-expanded"
+      ],
+      true,
+    );
+    assert.equal(f.row("b").props["data-session"], "b");
+  } finally {
+    f.dispose();
+  }
+});
+
+test("pinned rows get their own container and the list uses a compact scale", () => {
+  const f = setup({ ids: ["a", "b"], pinned: ["a"] });
+  try {
+    const css = f.find((n) => n.type === "style").children.join("");
+    assert.match(css, /\.gp\{font-size:13px\}/);
+    assert.match(css, /\.gp-row\{min-height:32px\}/);
+    assert.match(css, /\.gp-header\{[^}]*background:rgba\(127,127,127,\.13\)/);
+    assert.match(css, /\.gp-locate\{[^}]*width:26px;height:26px/);
+    assert.match(css, /@keyframes gp-flash\{/);
+    const pins = f.find((n) => n.props.className === "gp-pins");
+    assert.ok(
+      f.nodes(pins).some((n) => n.props["data-session"] === "a"),
+      "pinned row sits inside the pins container",
+    );
+    assert.equal(
+      f.nodes(pins).some((n) => n.props["data-session"] === "b"),
+      false,
+      "workspace row stays outside the pins container",
+    );
+  } finally {
+    f.dispose();
+  }
+});

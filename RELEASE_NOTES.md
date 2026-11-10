@@ -1,3 +1,18 @@
+# v1.0.5
+
+- Add a target button beside the magnifier that jumps to the current session. It expands that
+  session's workspace when folded, turns on archived rows when the session is archived, scrolls
+  the row to the middle and flashes it once.
+- Give every section heading a translucent grey glass band, slightly darker than the sidebar
+  background, so the pinned block and each workspace are easier to tell apart. Conversation rows
+  keep their normal background instead of a white card.
+- Shrink conversation rows to 13px text on 32px tracks so more sessions fit without clipping
+  titles or actions.
+
+All 65 automated tests pass on Node 22. Syntax and formatting checks pass. The user confirmed
+the locator, the glass section band and the compact rows in the desktop app; the VM tests do not
+prove real layout or paint.
+
 # v1.0.4
 
 - Add a search overlay behind the magnifier beside the "Global pins" heading. It searches conversation titles and workspace names locally, then the Host message-content index, with the same 20-result bound as the native browser.

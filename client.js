@@ -103,6 +103,32 @@ window.__ModuleLoader__.load({
         }),
       );
     }
+    // Target artwork for the jump-to-current-session trigger.
+    function locateIcon() {
+      return h(
+        "svg",
+        {
+          width: 14,
+          height: 14,
+          viewBox: "0 0 16 16",
+          fill: "none",
+          strokeWidth: 1.2,
+          "aria-hidden": "true",
+          focusable: "false",
+        },
+        h("circle", {
+          cx: 8,
+          cy: 8,
+          r: 4.25,
+          stroke: "currentColor",
+        }),
+        h("path", {
+          d: "M8 1v2.5M8 12.5V15M1 8h2.5M12.5 8H15",
+          stroke: "currentColor",
+          strokeLinecap: "round",
+        }),
+      );
+    }
     function reconcile(ids, saved = []) {
       const allowed = new Set(ids);
       return [...new Set([...saved.filter((id) => allowed.has(id)), ...ids])];
@@ -163,6 +189,7 @@ window.__ModuleLoader__.load({
       contentDisabled:
         "Message-content search is disabled in this deployment; showing name matches only.",
       searchHint: "↑↓ to select · Enter to open · Esc to close",
+      locate: "Jump to current session",
       new: "New session",
       add: "Add workspace",
       pin: "Pin",
@@ -208,6 +235,7 @@ window.__ModuleLoader__.load({
       groupContent: "内容",
       contentDisabled: "此部署未启用消息内容索引，只能匹配会话名称。",
       searchHint: "↑↓ 选择 · Enter 打开 · Esc 关闭",
+      locate: "定位当前会话",
       new: "新会话",
       add: "添加工作区",
       pin: "置顶",
@@ -276,7 +304,9 @@ window.__ModuleLoader__.load({
         [busy, setBusy] = React.useState(false),
         [over, setOver] = React.useState(null),
         [find, setFind] = React.useState(null),
-        [hits, setHits] = React.useState(null);
+        [hits, setHits] = React.useState(null),
+        [reveal, setReveal] = React.useState(null),
+        [flash, setFlash] = React.useState(null);
       const findInput = React.useRef(null),
         findTrigger = React.useRef(null);
       React.useEffect(() => {
@@ -286,6 +316,25 @@ window.__ModuleLoader__.load({
           actionOrigin.current?.focus();
         }
       }, [busy, rename, menu]);
+      React.useEffect(() => {
+        // Drop the transient locate highlight once the row has settled.
+        if (flash === null) return;
+        const timer = setTimeout(() => setFlash(null), 1400);
+        return () => clearTimeout(timer);
+      }, [flash]);
+      React.useEffect(() => {
+        // Runs again after a fold change has rendered the target row.
+        if (!reveal || typeof document === "undefined") return;
+        const nodes = document.querySelectorAll("[data-session]");
+        const node = Array.prototype.find.call(
+          nodes,
+          (el) => el.getAttribute("data-session") === reveal.id,
+        );
+        if (!node) return;
+        node.scrollIntoView?.({ block: "center" });
+        setFlash(reveal.id);
+        setReveal(null);
+      }, [reveal, fold, showArchived]);
       const prefsRef = React.useRef(prefs);
       prefsRef.current = prefs;
       const drag = React.useRef(null),
@@ -554,6 +603,19 @@ window.__ModuleLoader__.load({
         setHits(null);
         api.open(id);
       }
+      function locateCurrent() {
+        if (!active) return;
+        const key = pins.has(active)
+          ? "pins"
+          : (owner.get(active) ?? "ungrouped");
+        if (fold[key]) {
+          const next = { ...fold };
+          delete next[key];
+          setFold(next);
+        }
+        if (archives.has(active)) setShowArchived(true);
+        setReveal({ id: active });
+      }
       function findKeys(e) {
         const { rows } = searchRows(),
           active = find === null ? 0 : find.active;
@@ -732,8 +794,10 @@ window.__ModuleLoader__.load({
             "div",
             {
               className: "gp-row",
+              "data-session": id,
               "data-selected": id === active,
               "data-running": running ? "true" : undefined,
+              "data-flash": flash === id ? "true" : undefined,
               "data-drop": indicator(key, ids, id),
               draggable:
                 !busy &&
@@ -1026,6 +1090,7 @@ window.__ModuleLoader__.load({
 .gp [data-drop="before"]::before{top:-1px}.gp [data-drop="before"]::after{top:-3px}
 .gp [data-drop="after"]::before,.gp [data-drop="end"]::before{bottom:-1px}
 .gp [data-drop="after"]::after,.gp [data-drop="end"]::after{bottom:-3px}
+.gp{font-size:13px}.gp-header strong{font-size:12px}.gp-row{min-height:32px}.gp-header{background:rgba(127,127,127,.13);backdrop-filter:blur(8px);border-radius:7px;padding:2px 6px}.gp-pins{display:flex;flex-direction:column}.gp-group{padding-top:2px}.gp-locate{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0}.gp-locate:disabled{opacity:.4;cursor:default}.gp-row[data-flash=true]{animation:gp-flash 1.4s ease-out}@keyframes gp-flash{0%,55%{background:var(--dsw-alias-bg-layer-3)}100%{background:transparent}}@media (prefers-reduced-motion:reduce){.gp-row[data-flash=true]{animation:none}}
 `,
         ),
         editor &&
@@ -1123,6 +1188,17 @@ window.__ModuleLoader__.load({
             searchIcon(),
           ),
           h(
+            "button",
+            {
+              className: "gp-locate",
+              title: t("locate"),
+              "aria-label": t("locate"),
+              disabled: !active || busy || Boolean(rename),
+              onClick: locateCurrent,
+            },
+            locateIcon(),
+          ),
+          h(
             "details",
             {
               className: "gp-sort",
@@ -1203,9 +1279,13 @@ window.__ModuleLoader__.load({
             onDragLeave: leave,
             onDrop: (e) => drop(e, "pins", pinIds),
           },
-          pinIds.some(visible)
-            ? pinIds.map((id) => row(id, "pins", pinIds))
-            : h("div", { className: "gp-note" }, t("empty")),
+          h(
+            "div",
+            { className: "gp-pins" },
+            pinIds.some(visible)
+              ? pinIds.map((id) => row(id, "pins", pinIds))
+              : h("div", { className: "gp-note" }, t("empty")),
+          ),
         ),
         h(
           "div",
