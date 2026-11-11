@@ -1,3 +1,21 @@
+# v1.0.6
+
+- Add a "Recent" section under the global pins. Conversations used today that are not pinned
+  collect there newest-first from every workspace, so a new conversation is reachable without
+  opening its workspace. The list refreshes at local midnight and when the window becomes visible
+  again, so yesterday's unpinned conversations fall back into their own workspace. Rows there
+  cannot be dragged or moved up/down; rename, fork, archive/restore and pin still work.
+- "Today" means the local calendar day of the `updatedAt` value Harness exposes to plugins, so a
+  conversation created earlier but used today also counts as recent. Pinned, archived and blank
+  conversations never enter the section.
+- The "Global pins" heading now has the same fold triangle as workspace headings, and folding
+  keeps the clicked heading where it was on screen instead of jumping the list to the top.
+  Collapsed sections keep only a small gap, so several folded workspaces stay compact.
+
+All 71 automated tests pass on Node 22. Syntax, formatting and package checks pass. The user has
+not yet confirmed the recent section, the fold buttons or the tighter spacing in the desktop app;
+the VM tests do not prove real layout, scroll anchoring or paint.
+
 # v1.0.5
 
 - Add a target button beside the magnifier that jumps to the current session. It expands that
