@@ -147,6 +147,10 @@ window.__ModuleLoader__.load({
           a.localeCompare(b),
       );
     }
+    function dayKey(timestamp) {
+      const date = new Date(timestamp);
+      return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    }
     function reconcilePins(ids, saved = []) {
       return reconcile(ids, [
         ...ids.filter((id) => !saved.includes(id)),
@@ -176,6 +180,7 @@ window.__ModuleLoader__.load({
       pins: "Pinned",
       workspaces: "Workspaces",
       recent: "Last updated",
+      recentSessions: "Recent",
       manual: "Manual order",
       empty: "Pin a conversation or drag it here",
       searchOpen: "Search sessions and content",
@@ -223,6 +228,7 @@ window.__ModuleLoader__.load({
       pins: "全局置顶",
       workspaces: "工作区",
       recent: "最近更新",
+      recentSessions: "最近会话",
       manual: "手动排序",
       empty: "置顶会话或拖拽到这里",
       searchOpen: "搜索会话和内容",
@@ -305,10 +311,46 @@ window.__ModuleLoader__.load({
         [over, setOver] = React.useState(null),
         [find, setFind] = React.useState(null),
         [hits, setHits] = React.useState(null),
+        [pinsOpen, setPinsOpen] = React.useState(true),
         [reveal, setReveal] = React.useState(null),
-        [flash, setFlash] = React.useState(null);
+        [flash, setFlash] = React.useState(null),
+        // Local calendar day; the Recent section is rebuilt when it changes.
+        [day, setDay] = React.useState(() => dayKey(Date.now()));
       const findInput = React.useRef(null),
-        findTrigger = React.useRef(null);
+        findTrigger = React.useRef(null),
+        scrollBox = React.useRef(null),
+        foldAnchor = React.useRef(null);
+      // Collapsing removes rows, so keep the clicked header at the same
+      // viewport position instead of letting the scroll container jump.
+      function scrollable(node) {
+        if (typeof document === "undefined") return null;
+        for (let el = node?.parentElement; el; el = el.parentElement) {
+          const overflow = getComputedStyle(el).overflowY;
+          if (
+            (overflow === "auto" || overflow === "scroll") &&
+            el.scrollHeight > el.clientHeight
+          )
+            return el;
+        }
+        return null;
+      }
+      function toggleFold(button, apply) {
+        const box = scrollable(button) || scrollBox.current;
+        foldAnchor.current =
+          typeof document !== "undefined" &&
+          box &&
+          button?.getBoundingClientRect
+            ? { button, box, top: button.getBoundingClientRect().top }
+            : null;
+        apply();
+      }
+      React.useEffect(() => {
+        const saved = foldAnchor.current;
+        foldAnchor.current = null;
+        if (!saved?.button?.isConnected || !saved.box) return;
+        saved.box.scrollTop +=
+          saved.button.getBoundingClientRect().top - saved.top;
+      }, [fold, pinsOpen]);
       React.useEffect(() => {
         // Wait until React re-enables the row action after rename/pending state.
         if (focusPending.current && !busy && !rename && !menu) {
@@ -316,6 +358,33 @@ window.__ModuleLoader__.load({
           actionOrigin.current?.focus();
         }
       }, [busy, rename, menu]);
+      React.useEffect(() => {
+        // One timer at the next local midnight keeps the day boundary fresh
+        // without polling; a resumed tab rechecks on visibility instead.
+        function sync() {
+          const next = dayKey(Date.now());
+          setDay((current) => (current === next ? current : next));
+        }
+        const now = Date.now();
+        const midnight = new Date(now);
+        midnight.setHours(24, 0, 0, 0);
+        const timer = setTimeout(
+          sync,
+          Math.max(1000, midnight.getTime() - now + 1000),
+        );
+        function onVisible() {
+          if (
+            typeof document === "undefined" ||
+            document.visibilityState === "visible"
+          )
+            sync();
+        }
+        window.addEventListener("visibilitychange", onVisible);
+        return () => {
+          clearTimeout(timer);
+          window.removeEventListener("visibilitychange", onVisible);
+        };
+      }, [day]);
       React.useEffect(() => {
         // Drop the transient locate highlight once the row has settled.
         if (flash === null) return;
@@ -439,6 +508,24 @@ window.__ModuleLoader__.load({
         ws.pinnedSessionIds.filter((id) => !archives.has(id)),
         "pins",
       );
+      // Sessions touched today stay in one recent bucket above the workspace
+      // groups, then fall back to their own workspace on the next local day.
+      // The list snapshot carries no creation time, so today's activity is the
+      // durable signal available to the plugin.
+      const today = dayKey(day);
+      const recentIds = recent(
+        list.ids.filter(
+          (id) =>
+            valid(id) &&
+            !byId[id].blank &&
+            !pins.has(id) &&
+            !archives.has(id) &&
+            byId[id].updatedAt != null &&
+            dayKey(byId[id].updatedAt) === today,
+        ),
+        byId,
+      );
+      const recentSet = new Set(recentIds);
       function reorder(key, ids, id, before) {
         const currentPrefs = prefsRef.current;
         const orders = { ...currentPrefs.orders };
@@ -777,7 +864,7 @@ window.__ModuleLoader__.load({
           items[next]?.focus();
         }
       }
-      function row(id, key, ids) {
+      function row(id, key, ids, fixed = false) {
         if (!visible(id)) return null;
         const archived = archives.has(id),
           status = statuses.get(id),
@@ -798,8 +885,9 @@ window.__ModuleLoader__.load({
               "data-selected": id === active,
               "data-running": running ? "true" : undefined,
               "data-flash": flash === id ? "true" : undefined,
-              "data-drop": indicator(key, ids, id),
+              "data-drop": fixed ? undefined : indicator(key, ids, id),
               draggable:
+                !fixed &&
                 !busy &&
                 !rename &&
                 !menu &&
@@ -825,6 +913,7 @@ window.__ModuleLoader__.load({
               },
               onDragStart: (e) => {
                 if (
+                  fixed ||
                   rename ||
                   menu ||
                   lock.current ||
@@ -841,9 +930,9 @@ window.__ModuleLoader__.load({
                 drag.current = null;
                 setOver(null);
               },
-              onDragOver: (e) => hover(e, key, ids, id),
-              onDragLeave: leave,
-              onDrop: (e) => drop(e, key, ids, id),
+              onDragOver: fixed ? undefined : (e) => hover(e, key, ids, id),
+              onDragLeave: fixed ? undefined : leave,
+              onDrop: fixed ? undefined : (e) => drop(e, key, ids, id),
             },
             rename?.id === id
               ? h(
@@ -1008,8 +1097,7 @@ window.__ModuleLoader__.load({
                 "rename",
                 "fork",
                 archived ? "restore" : "archive",
-                "up",
-                "down",
+                ...(fixed ? [] : ["up", "down"]),
               ].map((action) =>
                 h(
                   "button",
@@ -1061,6 +1149,7 @@ window.__ModuleLoader__.load({
         "section",
         {
           className: "gp",
+          ref: scrollBox,
           "aria-label": t("pins"),
           onKeyDown: (e) => {
             if (
@@ -1090,7 +1179,7 @@ window.__ModuleLoader__.load({
 .gp [data-drop="before"]::before{top:-1px}.gp [data-drop="before"]::after{top:-3px}
 .gp [data-drop="after"]::before,.gp [data-drop="end"]::before{bottom:-1px}
 .gp [data-drop="after"]::after,.gp [data-drop="end"]::after{bottom:-3px}
-.gp{font-size:13px}.gp-header strong{font-size:12px}.gp-row{min-height:32px}.gp-header{background:rgba(127,127,127,.13);backdrop-filter:blur(8px);border-radius:7px;padding:2px 6px}.gp-pins{display:flex;flex-direction:column}.gp-group{padding-top:2px}.gp-locate{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0}.gp-locate:disabled{opacity:.4;cursor:default}.gp-row[data-flash=true]{animation:gp-flash 1.4s ease-out}@keyframes gp-flash{0%,55%{background:var(--dsw-alias-bg-layer-3)}100%{background:transparent}}@media (prefers-reduced-motion:reduce){.gp-row[data-flash=true]{animation:none}}
+.gp{font-size:13px}.gp-header strong{font-size:12px}.gp-row{min-height:32px}.gp-header{background:rgba(127,127,127,.13);backdrop-filter:blur(8px);border-radius:7px;padding:2px 6px}.gp-pins{display:flex;flex-direction:column}.gp-group{margin-top:8px;padding-top:0}.gp-recent{margin-top:8px}.gp-header{margin:6px 0 3px;padding:2px 6px}.gp-locate{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0}.gp-locate:disabled{opacity:.4;cursor:default}.gp-row[data-flash=true]{animation:gp-flash 1.4s ease-out}@keyframes gp-flash{0%,55%{background:var(--dsw-alias-bg-layer-3)}100%{background:transparent}}@media (prefers-reduced-motion:reduce){.gp-row[data-flash=true]{animation:none}}
 `,
         ),
         editor &&
@@ -1174,6 +1263,17 @@ window.__ModuleLoader__.load({
         h(
           "div",
           { className: "gp-header" },
+          h(
+            "button",
+            {
+              className: "gp-fold",
+              disabled: Boolean(rename),
+              "aria-expanded": pinsOpen,
+              onClick: (e) =>
+                toggleFold(e?.currentTarget, () => setPinsOpen(!pinsOpen)),
+            },
+            pinsOpen ? "▾" : "▸",
+          ),
           h("strong", null, t("pins")),
           h(
             "button",
@@ -1270,23 +1370,38 @@ window.__ModuleLoader__.load({
             ),
           ),
         ),
-        h(
-          "div",
-          {
-            className: "gp-drop",
-            "data-drop": indicator("pins", pinIds),
-            onDragOver: (e) => hover(e, "pins", pinIds),
-            onDragLeave: leave,
-            onDrop: (e) => drop(e, "pins", pinIds),
-          },
+        pinsOpen &&
           h(
             "div",
-            { className: "gp-pins" },
-            pinIds.some(visible)
-              ? pinIds.map((id) => row(id, "pins", pinIds))
-              : h("div", { className: "gp-note" }, t("empty")),
+            {
+              className: "gp-drop",
+              "data-drop": indicator("pins", pinIds),
+              onDragOver: (e) => hover(e, "pins", pinIds),
+              onDragLeave: leave,
+              onDrop: (e) => drop(e, "pins", pinIds),
+            },
+            h(
+              "div",
+              { className: "gp-pins" },
+              pinIds.some(visible)
+                ? pinIds.map((id) => row(id, "pins", pinIds))
+                : h("div", { className: "gp-note" }, t("empty")),
+            ),
           ),
-        ),
+        recentIds.length > 0 &&
+          h(
+            "section",
+            {
+              className: "gp-group gp-recent",
+              "aria-label": t("recentSessions"),
+            },
+            h(
+              "div",
+              { className: "gp-header" },
+              h("strong", null, t("recentSessions")),
+            ),
+            recentIds.map((id) => row(id, "recent", recentIds, true)),
+          ),
         h(
           "div",
           { className: "gp-header" },
@@ -1305,7 +1420,7 @@ window.__ModuleLoader__.load({
               ids,
               ws.pinnedSessionIds,
               ws.archivedSessionIds,
-            ).ordinary;
+            ).ordinary.filter((id) => !recentSet.has(id));
           return h(
             "section",
             {
@@ -1322,10 +1437,16 @@ window.__ModuleLoader__.load({
               h(
                 "button",
                 {
+                  className: "gp-fold",
                   disabled: Boolean(rename),
                   "aria-expanded": !fold[g.workspaceId],
-                  onClick: () =>
-                    setFold({ ...fold, [g.workspaceId]: !fold[g.workspaceId] }),
+                  onClick: (e) =>
+                    toggleFold(e?.currentTarget, () =>
+                      setFold({
+                        ...fold,
+                        [g.workspaceId]: !fold[g.workspaceId],
+                      }),
+                    ),
                 },
                 fold[g.workspaceId] ? "▸" : "▾",
               ),
@@ -1561,7 +1682,15 @@ window.__ModuleLoader__.load({
           ),
         );
       },
-      test: { reconcile, reconcilePins, move, recent, clean, partition },
+      test: {
+        reconcile,
+        reconcilePins,
+        move,
+        recent,
+        clean,
+        partition,
+        dayKey,
+      },
     };
   },
 });

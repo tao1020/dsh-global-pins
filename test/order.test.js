@@ -18,7 +18,7 @@ vm.runInNewContext(
     },
   },
 );
-const { reconcile, reconcilePins, move, recent, clean, partition } =
+const { reconcile, reconcilePins, move, recent, clean, partition, dayKey } =
   plugin.test;
 test("new pins prepend; unpin then repin regains first place", () => {
   assert.deepEqual(plain(reconcilePins(["new", "a", "b"], ["b", "a"])), [
@@ -113,4 +113,12 @@ test("packaged metadata and runtime exports exist", () => {
       JSON.parse(fs.readFileSync(new URL(`locale/${locale}.json`, root))).meta
         .description,
     );
+});
+
+test("dayKey buckets timestamps by the local calendar day", () => {
+  const early = new Date(2026, 10, 11, 0, 5).getTime();
+  const late = new Date(2026, 10, 11, 23, 55).getTime();
+  const nextDay = new Date(2026, 10, 12, 0, 5).getTime();
+  assert.equal(dayKey(early), dayKey(late));
+  assert.notEqual(dayKey(late), dayKey(nextDay));
 });

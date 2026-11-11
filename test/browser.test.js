@@ -1529,12 +1529,19 @@ test("the locator stays disabled until a row is the current session", () => {
 
 test("locating expands the collapsed workspace holding the current session", () => {
   const f = setup({ ids: ["a", "b"], pinned: [] });
+  const workspaceToggle = () =>
+    f
+      .nodes()
+      .find(
+        (n) =>
+          n.props.className === "gp-header" &&
+          n.children.some((c) => c?.children?.[0] === "Workspace"),
+      )
+      .children.find((c) => c?.props?.["aria-expanded"] !== undefined);
   try {
     f.list.byId.b.retainedBy.mainView = 1;
     f.render();
-    f.find(
-      (n) => typeof n.props["aria-expanded"] === "boolean",
-    ).props.onClick();
+    workspaceToggle().props.onClick();
     f.render();
     assert.equal(
       f.nodes().some((n) => n.props.className === "gp-row"),
@@ -1542,13 +1549,58 @@ test("locating expands the collapsed workspace holding the current session", () 
     );
     f.find((n) => n.props.className === "gp-locate").props.onClick();
     f.render();
+    assert.equal(workspaceToggle().props["aria-expanded"], true);
+    assert.equal(f.row("b").props["data-session"], "b");
+  } finally {
+    f.dispose();
+  }
+});
+
+test("the pinned header folds its rows without losing its tools", () => {
+  const f = setup({ ids: ["a", "b"], pinned: ["a"] });
+  try {
+    const pins = () => f.find((n) => n.props.className === "gp-pins");
     assert.equal(
-      f.find((n) => typeof n.props["aria-expanded"] === "boolean").props[
-        "aria-expanded"
-      ],
+      f.nodes(pins()).some((n) => n.props["data-session"] === "a"),
       true,
     );
-    assert.equal(f.row("b").props["data-session"], "b");
+    const pinsHeader = () =>
+      f.find(
+        (n) =>
+          n.props.className === "gp-header" &&
+          n.children.some((c) => c?.props?.className === "gp-fold"),
+      );
+    assert.equal(
+      pinsHeader().children.find((c) => c?.props?.className === "gp-fold")
+        .props["aria-expanded"],
+      true,
+    );
+    f.find((n) => n.props.className === "gp-fold").props.onClick();
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-pins"),
+      false,
+    );
+    assert.equal(
+      pinsHeader().children.find((c) => c?.props?.className === "gp-fold")
+        .props["aria-expanded"],
+      false,
+    );
+    assert.ok(
+      f.nodes(pinsHeader()).some((n) => n.props.className === "gp-search-open"),
+      "search stays reachable while folded",
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("section spacing stays compact between folded groups", () => {
+  const f = setup();
+  try {
+    const css = f.find((n) => n.type === "style").children.join("");
+    assert.match(css, /\.gp-header\{margin:6px 0 3px/);
+    assert.match(css, /\.gp-group\{margin-top:8px/);
   } finally {
     f.dispose();
   }
@@ -1572,6 +1624,87 @@ test("pinned rows get their own container and the list uses a compact scale", ()
       f.nodes(pins).some((n) => n.props["data-session"] === "b"),
       false,
       "workspace row stays outside the pins container",
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("sessions touched today sit in a recent section above the workspaces", () => {
+  const f = setup({ ids: ["a", "b", "c"], pinned: [] });
+  try {
+    const now = Date.now();
+    f.list.byId.a.updatedAt = now - 1000;
+    f.list.byId.b.updatedAt = now;
+    f.list.byId.c.updatedAt = now - 2 * 86400000;
+    f.render();
+    const rows = (node) =>
+      f
+        .nodes(node)
+        .filter((n) => n.props.className === "gp-row")
+        .map((n) => n.props["data-session"]);
+    const recent = f.find((n) => n.props.className === "gp-group gp-recent");
+    assert.equal(recent.children[0].children[0].children[0], "recentSessions");
+    assert.deepEqual(rows(recent), ["b", "a"]);
+    const workspace = f.find((n) => n.props.className === "gp-group");
+    assert.deepEqual(rows(workspace), ["c"]);
+    assert.equal(f.row("a").props.draggable, false);
+    openRowMenu(f, "a");
+    const actions = f
+      .nodes(f.find((n) => n.props.role === "menu"))
+      .filter((n) => n.props.role === "menuitem")
+      .map((n) => n.children[0]);
+    assert.deepEqual(actions, ["rename", "fork", "archive"]);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("sessions from earlier days return to their own workspace", () => {
+  const f = setup({ ids: ["a", "b"], pinned: [] });
+  try {
+    const before = Date.now() - 2 * 86400000;
+    f.list.byId.a.updatedAt = before;
+    f.list.byId.b.updatedAt = before;
+    f.render();
+    assert.equal(
+      f.nodes().some((n) => n.props.className === "gp-group gp-recent"),
+      false,
+    );
+    const workspace = f.find((n) => n.props.className === "gp-group");
+    assert.deepEqual(
+      f
+        .nodes(workspace)
+        .filter((n) => n.props.className === "gp-row")
+        .map((n) => n.props["data-session"]),
+      ["a", "b"],
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("pinned, archived and blank sessions stay out of the recent section", () => {
+  const f = setup({ ids: ["a", "b", "c", "d"], pinned: ["a"] });
+  try {
+    const now = Date.now();
+    for (const id of ["a", "b", "c", "d"]) f.list.byId[id].updatedAt = now;
+    f.list.byId.c.blank = true;
+    f.ws.archivedSessionIds.push("d");
+    f.render();
+    const recent = f.find((n) => n.props.className === "gp-group gp-recent");
+    assert.deepEqual(
+      f
+        .nodes(recent)
+        .filter((n) => n.props.className === "gp-row")
+        .map((n) => n.props["data-session"]),
+      ["b"],
+    );
+    assert.equal(
+      f
+        .nodes(f.find((n) => n.props.className === "gp-pins"))
+        .some((n) => n.props["data-session"] === "a"),
+      true,
     );
   } finally {
     f.dispose();
