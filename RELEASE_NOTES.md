@@ -1,3 +1,22 @@
+# v1.0.7
+
+- Archiving a conversation that still owns live work now asks once instead of failing. Harness
+  refuses the archive with `workspace/session-active`; the plugin reads which work it named (a
+  running turn, a subagent, a background job, a scheduled task) and opens a confirmation that
+  lists it, naming each scheduled task. Cancelling is the focused choice and stops nothing.
+  Confirming retries the archive with `stopActivity`, which cancels the turn, its subagents and
+  background jobs and deletes that conversation's scheduled tasks — those deletions cannot be
+  undone, so the dialog says so. Both the row's archive button and the right-click menu go
+  through the same confirmation.
+- Activity comes from the Host error's structured `details.activity`; if a carrier drops that
+  payload, the stable refusal text still names the kinds instead. Failures unrelated to active
+  work keep showing their own message.
+
+All 75 automated tests pass on Node 22. Syntax and package checks pass. The four new tests drive
+the refusal, the confirm, the cancel path and the text-only fallback through the VM harness; they
+do not prove the dialog's real layout, focus order or the deletion of a real scheduled task. The
+user has not yet confirmed this dialog in the desktop app.
+
 # v1.0.6
 
 - Add a "Recent" section under the global pins. Conversations used today that are not pinned

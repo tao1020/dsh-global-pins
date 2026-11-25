@@ -12,6 +12,7 @@ function setup({
   locale,
   rename = async () => ({ ok: true }),
   search = async () => ({ ok: true, value: { items: [], hasMore: false } }),
+  archive = null,
 } = {}) {
   let component,
     plugin,
@@ -157,6 +158,7 @@ function setup({
   let resolvePin;
   const unpinCalls = [];
   const pinCalls = [];
+  const archiveCalls = [];
   const ws = {
     phase: "ready",
     state: "idle",
@@ -190,6 +192,11 @@ function setup({
         return new Promise((resolve) => {
           resolvePin = resolve;
         });
+      },
+      archive: async (...args) => {
+        archiveCalls.push(args);
+        if (archive) return archive(...args);
+        return injected.api.archive(...args);
       },
     },
   };
@@ -244,6 +251,7 @@ function setup({
     list,
     unpinCalls,
     pinCalls,
+    archiveCalls,
     renameCalls,
     openCalls,
     searchCalls,
@@ -1706,6 +1714,133 @@ test("pinned, archived and blank sessions stay out of the recent section", () =>
         .some((n) => n.props["data-session"] === "a"),
       true,
     );
+  } finally {
+    f.dispose();
+  }
+});
+
+// The Host refuses to archive a Session that still owns live work and names
+// what must stop first. That refusal is a decision point, not an error: the
+// plugin asks the user, and only the confirmed answer retries with
+// `stopActivity`.
+const refusal = {
+  name: "WorkspaceArchiveError",
+  message:
+    "workspace session archive failed: workspace/session-active: cannot archive session 'a': the session is active (schedule)",
+  rpcError: {
+    code: "workspace/session-active",
+    message: "cannot archive session 'a': the session is active (schedule)",
+    details: {
+      sessionId: "a",
+      activity: [
+        { kind: "schedule", items: [{ id: "t1", label: "Daily retry" }] },
+      ],
+    },
+  },
+};
+function text(node) {
+  if (typeof node === "string") return node;
+  return (node?.children || []).map(text).join(" ");
+}
+function archiveButton(f, id) {
+  const found = f
+    .nodes(f.row(id))
+    .find((node) => node.props.title === "archive");
+  assert.ok(found, "expected an archive control on the row");
+  return found;
+}
+
+test("archive refusal asks before stopping the named work", async () => {
+  const f = setup({
+    archive: async (_id, options) => {
+      if (options?.stopActivity === true) return;
+      throw refusal;
+    },
+  });
+  try {
+    await archiveButton(f, "a").props.onClick();
+    f.render();
+    const dialog = f.find((node) => node.props.role === "alertdialog");
+    assert.match(text(dialog), /Daily retry/);
+    assert.equal(f.archiveCalls.length, 1);
+    assert.equal(f.archiveCalls[0].length, 1, "no stop before confirmation");
+
+    await f.find((node) => node.props.className === "gp-confirm-go").props.onClick();
+    f.render();
+    // The call crosses the VM realm, so compare fields rather than prototypes.
+    assert.equal(f.archiveCalls[1][0], "a");
+    assert.equal(f.archiveCalls[1][1].stopActivity, true);
+    assert.equal(
+      f.nodes().some((node) => node.props.role === "alertdialog"),
+      false,
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("dismissing the archive prompt changes nothing", async () => {
+  const f = setup({
+    archive: async () => {
+      throw refusal;
+    },
+  });
+  try {
+    await archiveButton(f, "a").props.onClick();
+    f.render();
+    const dialog = f.find((node) => node.props.role === "alertdialog");
+    await f
+      .nodes(dialog)
+      .find((node) => node.props.className !== "gp-confirm-go" && node.children.some((child) => typeof child === "string" && /cancel/i.test(child)))
+      .props.onClick();
+    f.render();
+    assert.equal(
+      f.nodes().some((node) => node.props.role === "alertdialog"),
+      false,
+    );
+    assert.equal(f.archiveCalls.length, 1);
+    assert.equal(f.archiveCalls[0].length, 1);
+  } finally {
+    f.dispose();
+  }
+});
+
+test("archive failures unrelated to active work still surface as an error", async () => {
+  const f = setup({
+    archive: async () => {
+      throw new Error("workspace session archive failed: boom");
+    },
+  });
+  try {
+    await archiveButton(f, "a").props.onClick();
+    f.render();
+    assert.equal(
+      f.nodes().some((node) => node.props.role === "alertdialog"),
+      false,
+    );
+    assert.ok(
+      f.nodes().some((node) => /boom/.test(text(node))),
+      "expected the original failure text",
+    );
+  } finally {
+    f.dispose();
+  }
+});
+
+test("the refusal message alone still names the work to stop", async () => {
+  const f = setup({
+    archive: async () => {
+      throw new Error(
+        "workspace session archive failed: workspace/session-active: cannot archive session 'a': the session is active (turn, job)",
+      );
+    },
+  });
+  try {
+    await archiveButton(f, "a").props.onClick();
+    f.render();
+    const dialog = f.find((node) => node.props.role === "alertdialog");
+    assert.match(text(dialog), /activityTurn/);
+    assert.match(text(dialog), /activityJob/);
   } finally {
     f.dispose();
   }
