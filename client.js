@@ -220,6 +220,15 @@ window.__ModuleLoader__.load({
       loading: "Loading…",
       completed: "Completed (unread)",
       running: "Running",
+      archiveActive: "This conversation is still active",
+      archiveActiveNote:
+        "Archiving stops and deletes the items above; a deleted scheduled task cannot be restored.",
+      archiveAndStop: "Archive and stop",
+      activityTurn: "A turn is still running",
+      activitySchedule: "Scheduled task",
+      activityJob: "Background task",
+      activitySubagent: "Running subagent",
+      activityOther: "Active work",
       invalidOrder: "Invalid saved order",
       orderChanged:
         "Order changed during the operation. Pin state saved; drag again to reorder.",
@@ -266,6 +275,15 @@ window.__ModuleLoader__.load({
       loading: "加载中…",
       completed: "已完成（未读）",
       running: "运行中",
+      archiveActive: "该会话还有未结束的活动",
+      archiveActiveNote:
+        "归档会立即停止并删除上面这些活动；被删除的定时任务无法恢复。",
+      archiveAndStop: "归档并停止",
+      activityTurn: "有一轮对话正在运行",
+      activitySchedule: "定时任务",
+      activityJob: "后台任务",
+      activitySubagent: "子代理正在运行",
+      activityOther: "活动",
       invalidOrder: "保存的排序数据无效",
       orderChanged: "操作期间排序已变化。置顶状态已保存，请重新拖拽排序。",
     };
@@ -311,6 +329,7 @@ window.__ModuleLoader__.load({
         [over, setOver] = React.useState(null),
         [find, setFind] = React.useState(null),
         [hits, setHits] = React.useState(null),
+        [archiveConfirm, setArchiveConfirm] = React.useState(null),
         [pinsOpen, setPinsOpen] = React.useState(true),
         [reveal, setReveal] = React.useState(null),
         [flash, setFlash] = React.useState(null),
@@ -460,6 +479,50 @@ window.__ModuleLoader__.load({
         } finally {
           lock.current = false;
           if (mounted.current) setBusy(false);
+        }
+      }
+      // Archiving a Session that still owns live work is refused by the Host
+      // with `workspace/session-active`, naming what must stop first. Offer
+      // that work as a confirmation instead of a dead end: the confirmed
+      // retry archives with `stopActivity`, which stops the turn, its
+      // subagents and background jobs, and deletes the Session's scheduled
+      // tasks. Silence is never consent, so nothing is stopped before the
+      // dialog is confirmed.
+      const activityLabels = {
+        turn: "activityTurn",
+        schedule: "activitySchedule",
+        job: "activityJob",
+        subagent: "activitySubagent",
+      };
+      function activeWork(error) {
+        // The Host business error travels as { code, message, details } on the
+        // service error's `rpcError`; older carriers used `data`.
+        for (const source of [
+          error?.rpcError?.details,
+          error?.rpcError?.data,
+          error?.details,
+          error?.data,
+        ]) {
+          if (Array.isArray(source?.activity) && source.activity.length > 0)
+            return source.activity;
+        }
+        // Last resort: the stable Host message names the kinds in order.
+        const message = error?.message || String(error ?? "");
+        const named = /the session is active \(([^)]*)\)/.exec(message);
+        if (!named) return null;
+        const kinds = named[1]
+          .split(",")
+          .map((kind) => kind.trim())
+          .filter(Boolean);
+        return kinds.length > 0 ? kinds.map((kind) => ({ kind })) : null;
+      }
+      async function archive(id) {
+        try {
+          await api.archive(id);
+        } catch (error) {
+          const work = activeWork(error);
+          if (!work || !mounted.current) throw error;
+          setArchiveConfirm({ id, work });
         }
       }
       const byId = list.byId,
@@ -1064,7 +1127,7 @@ window.__ModuleLoader__.load({
                       "aria-label": t(archived ? "restore" : "archive"),
                       onClick: () =>
                         run(() =>
-                          archived ? api.restore(id) : api.archive(id),
+                          archived ? api.restore(id) : archive(id),
                         ),
                     },
                     archiveIcon(),
@@ -1129,7 +1192,8 @@ window.__ModuleLoader__.load({
                               ? visibleIds[Math.max(0, i - 1)]
                               : visibleIds[i + 2],
                           );
-                        } else await api[action](id);
+                        } else if (action === "archive") await archive(id);
+                        else await api[action](id);
                       });
                     },
                   },
@@ -1180,6 +1244,7 @@ window.__ModuleLoader__.load({
 .gp [data-drop="after"]::before,.gp [data-drop="end"]::before{bottom:-1px}
 .gp [data-drop="after"]::after,.gp [data-drop="end"]::after{bottom:-3px}
 .gp{font-size:13px}.gp-header strong{font-size:12px}.gp-row{min-height:32px}.gp-header{background:rgba(127,127,127,.13);backdrop-filter:blur(8px);border-radius:7px;padding:2px 6px}.gp-pins{display:flex;flex-direction:column}.gp-group{margin-top:8px;padding-top:0}.gp-recent{margin-top:8px}.gp-header{margin:6px 0 3px;padding:2px 6px}.gp-locate{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0}.gp-locate:disabled{opacity:.4;cursor:default}.gp-row[data-flash=true]{animation:gp-flash 1.4s ease-out}@keyframes gp-flash{0%,55%{background:var(--dsw-alias-bg-layer-3)}100%{background:transparent}}@media (prefers-reduced-motion:reduce){.gp-row[data-flash=true]{animation:none}}
+.gp-confirm{width:min(460px,100%);max-height:none}.gp-confirm-list{margin:0;padding:0 14px;list-style:none;display:flex;flex-direction:column;gap:6px}.gp-confirm-items{margin:4px 0 0;padding-left:16px;list-style:disc;font-size:12px;color:var(--dsw-alias-label-secondary)}.gp-confirm-actions{display:flex;justify-content:flex-end;gap:8px;padding:10px 12px 12px;border-top:1px solid var(--dsw-alias-border-l1)}.gp-confirm-actions button{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 14px}.gp-confirm-go{font-weight:600;border-color:currentColor}
 `,
         ),
         editor &&
@@ -1620,6 +1685,88 @@ window.__ModuleLoader__.load({
               );
             })(),
           ),
+        archiveConfirm !== null &&
+          h(
+            "div",
+            {
+              className: "gp-find",
+              onMouseDown: (e) => {
+                if (e.target === e.currentTarget && !busy)
+                  setArchiveConfirm(null);
+              },
+            },
+            h(
+              "div",
+              {
+                className: "gp-find-panel gp-confirm",
+                role: "alertdialog",
+                "aria-modal": "true",
+                "aria-label": t("archiveActive"),
+                onKeyDown: (e) => {
+                  if (e.key === "Escape" && !busy) {
+                    e.preventDefault();
+                    setArchiveConfirm(null);
+                  }
+                },
+              },
+              h("div", { className: "gp-find-group" }, t("archiveActive")),
+              h(
+                "ul",
+                { className: "gp-confirm-list" },
+                archiveConfirm.work.map((entry, index) =>
+                  h(
+                    "li",
+                    { key: index },
+                    t(activityLabels[entry.kind] || "activityOther"),
+                    Array.isArray(entry.items) && entry.items.length > 0
+                      ? h(
+                          "ul",
+                          { className: "gp-confirm-items" },
+                          entry.items.map((item, itemIndex) =>
+                            h(
+                              "li",
+                              { key: itemIndex },
+                              item.label || item.id,
+                            ),
+                          ),
+                        )
+                      : null,
+                  ),
+                ),
+              ),
+              h("div", { className: "gp-note" }, t("archiveActiveNote")),
+              h(
+                "div",
+                { className: "gp-confirm-actions" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    autoFocus: true,
+                    disabled: busy,
+                    onClick: () => setArchiveConfirm(null),
+                  },
+                  t("cancel"),
+                ),
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "gp-confirm-go",
+                    disabled: busy,
+                    onClick: () => {
+                      const target = archiveConfirm.id;
+                      return run(async () => {
+                        await api.archive(target, { stopActivity: true });
+                        if (mounted.current) setArchiveConfirm(null);
+                      });
+                    },
+                  },
+                  t("archiveAndStop"),
+                ),
+              ),
+            ),
+          ),
       );
     }
     return {
@@ -1656,7 +1803,8 @@ window.__ModuleLoader__.load({
                   start: (id) => ctx.uiWorkspace.startSession(id),
                   pin: (id) => ctx.workspaces.pinSession(id),
                   unpin: (id) => ctx.workspaces.unpinSession(id),
-                  archive: (id) => ctx.uiWorkspace.archiveSession(id),
+                  archive: (id, options) =>
+                    ctx.uiWorkspace.archiveSession(id, options),
                   restore: (id) => ctx.uiWorkspace.unarchiveSession(id),
                   fork: (id) =>
                     ctx.uiWorkspace.forkSession(id, undefined, {
